@@ -1,0 +1,409 @@
+{% extends "layout.html" %}
+{% from '_macros.html' import render_pagination with context %}
+
+{% block title %}图书查询与借阅{% endblock %}
+
+{% block content %}
+<div class="fluent-card mb-6">
+    <h2 class="text-xl font-semibold text-gray-800 mb-4">图书查询</h2>
+    <div class="flex flex-col sm:flex-row gap-4">
+        <form id="normal-search-form" method="GET" action="{{ url_for('index') }}" class="flex-grow flex gap-4">
+            <input type="text" id="main-search-input" name="search_query" value="{{ search_query }}" placeholder="输入书名、编码进行搜索，或描述你想要的书..." class="flex-grow w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-primary/50">
+            <button type="submit" class="bg-theme-primary text-white px-6 py-2 hover:bg-theme-primary-dark fluent-btn">搜索</button>
+        </form>
+        <button id="ai-search-open-btn" class="bg-sky-500 text-white px-6 py-2 hover:bg-sky-600 fluent-btn flex items-center justify-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            <span>AI 搜书</span>
+        </button>
+    </div>
+</div>
+
+<div class="fluent-card">
+    <h2 class="text-xl font-semibold text-gray-800 mb-4">查询结果</h2>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50/50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">书名</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">书柜号</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">图书编码</th>
+                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">库存状态</th>
+                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">操作</th>
+                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">AI问答</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white/50 divide-y divide-gray-200">
+                {% for book in books_pagination.items %}
+                <tr>
+                    <td class="px-6 py-4">{{ book.title }}</td>
+                    <td class="px-6 py-4">{{ book.bookshelf_number }}</td>
+                    <td class="px-6 py-4">{{ book.book_code }}</td>
+                    <td class="px-6 py-4 text-center">
+                        {% if book.quantity_available > 0 %}<span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">可借阅 ({{ book.quantity_available }}/{{ book.stock }})</span>
+                        {% else %}<span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">已借完 (0/{{ book.stock }})</span>{% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-center space-x-2">
+                        {% if book.quantity_available > 0 %}
+                            {% if not current_user.records | selectattr('book_id', 'equalto', book.id) | selectattr('status', 'equalto', 'borrowed') | list %}
+                            <form method="POST" action="{{ url_for('borrow_book', book_id=book.id) }}" class="inline"><button type="submit" class="text-white bg-theme-primary hover:bg-theme-primary-dark px-3 py-1 fluent-btn">借阅</button></form>
+                            {% else %}
+                            <span class="text-gray-400 cursor-not-allowed">已借阅</span>
+                            {% endif %}
+                        {% else %}
+                            {% if not current_user.has_wanted(book) %}<form method="POST" action="{{ url_for('want_book', book_id=book.id) }}" class="inline"><button type="submit" class="text-white bg-sky-500 hover:bg-sky-600 px-3 py-1 fluent-btn">想要</button></form>
+                            {% else %}<span class="text-gray-400 cursor-not-allowed">已想要</span>{% endif %}
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 text-center">
+                         <button class="ask-ai-details-btn" data-book-title="{{ book.title }}" data-book-isbn="{{ book.isbn }}" title="询问AI获取书籍梗概">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-sky-500 hover:text-sky-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                         </button>
+                    </td>
+                </tr>
+                {% else %}<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">没有找到匹配的图书。</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% if books_pagination.pages > 1 %}{{ render_pagination(books_pagination, 'index', query_params={'search_query': search_query}) }}{% endif %}
+</div>
+
+
+<!-- AI Book Details Modal -->
+<div id="ai-details-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden items-center justify-center p-4">
+    <div class="fluent-card w-full max-w-2xl mx-auto flex flex-col" style="height: 80vh;">
+        <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold"><span class="text-sky-500">AI</span> 图书管理员</h2><button class="close-modal-btn text-2xl">&times;</button></div>
+        <div class="chat-log flex-grow space-y-4 overflow-y-auto p-4 bg-gray-50/80 rounded-lg"></div>
+        <div class="mt-4 pt-4 border-t flex gap-2"><input type="text" class="user-input flex-grow w-full px-4 py-2 bg-white border border-gray-300 rounded-lg" placeholder="可以继续提问..." disabled><button class="send-btn bg-sky-500 text-white px-4 py-2 fluent-btn" disabled>发送</button></div>
+    </div>
+</div>
+
+<!-- AI Search Modal -->
+<div id="ai-search-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden items-center justify-center p-4">
+    <div class="fluent-card w-full max-w-2xl mx-auto flex flex-col" style="height: 80vh;">
+        <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">AI 智能搜书</h2><button class="close-modal-btn text-2xl">&times;</button></div>
+        <div class="chat-log flex-grow space-y-4 overflow-y-auto p-4 bg-gray-50/80 rounded-lg"><div class="w-full flex justify-start"><div class="p-3 rounded-lg bg-white">你好！请用自然语言描述你想找什么样的书。</div></div></div>
+        <div id="ai-recommendations" class="mt-2 p-2 border-t border-gray-200"></div>
+        <div class="mt-4 pt-4 border-t flex gap-2"><input type="text" class="user-input flex-grow w-full px-4 py-2 bg-white border border-gray-300 rounded-lg" placeholder="请描述您想找的书..."><button class="send-btn bg-sky-500 text-white px-4 py-2 fluent-btn">发送</button></div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    // --- Global Audio Player ---
+    let audioContext = null;
+    let currentAudioSource = null;
+    let globalPlayingButton = null;
+
+    const playAudio = async (text, button) => {
+        if (currentAudioSource) {
+            currentAudioSource.onended = null;
+            currentAudioSource.stop();
+            currentAudioSource = null;
+        }
+        if (globalPlayingButton && globalPlayingButton !== button) {
+            globalPlayingButton.innerHTML = '朗读';
+        }
+        if (button === globalPlayingButton) {
+            globalPlayingButton = null;
+            button.innerHTML = '朗读';
+            return;
+        }
+
+        globalPlayingButton = button;
+        button.innerHTML = '加载中...'; 
+        button.disabled = true;
+
+        try {
+            const response = await fetch('/text-to-speech', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+            if (!response.ok) {
+                const err = await response.json();
+                alert(`语音合成失败: ${err.error || err.err_msg}`);
+                throw new Error('TTS failed');
+            }
+            if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const audioData = await response.arrayBuffer();
+            const source = audioContext.createBufferSource();
+            source.buffer = await audioContext.decodeAudioData(audioData);
+            source.connect(audioContext.destination);
+            source.start(0);
+            currentAudioSource = source;
+            button.innerHTML = '暂停';
+            button.disabled = false;
+            source.onended = () => {
+                if (button === globalPlayingButton) {
+                     button.innerHTML = '朗读';
+                     globalPlayingButton = null;
+                }
+            };
+        } catch (error) {
+            console.error('TTS Error:', error);
+            button.innerHTML = '朗读';
+            button.disabled = false;
+            globalPlayingButton = null;
+        }
+    };
+    
+    // --- AI Book Details Chat Logic ---
+    const setupDetailsModal = () => {
+        const modal = document.getElementById('ai-details-modal');
+        if (!modal) return;
+        
+        const closeBtn = modal.querySelector('.close-modal-btn');
+        const chatLog = modal.querySelector('.chat-log');
+        const userInput = modal.querySelector('.user-input');
+        const sendBtn = modal.querySelector('.send-btn');
+        let chatHistory = [];
+        let isAIResponding = false;
+
+        const renderMessage = (role, content) => {
+            const msgWrapper = document.createElement('div');
+            msgWrapper.className = `w-full flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `p-3 rounded-lg max-w-lg break-words ${role === 'user' ? 'bg-sky-100' : 'bg-white'}`;
+            msgDiv.innerHTML = content.replace(/\n/g, '<br>');
+            msgWrapper.appendChild(msgDiv);
+            chatLog.appendChild(msgWrapper);
+            chatLog.scrollTop = chatLog.scrollHeight;
+            return msgDiv;
+        };
+
+        const toggleInput = (disabled) => {
+            isAIResponding = disabled;
+            userInput.disabled = disabled;
+            sendBtn.disabled = disabled;
+        };
+
+        const getAiResponse = async () => {
+            toggleInput(true);
+            const aiMessageDiv = renderMessage('assistant', '▍');
+            let fullResponse = '';
+            try {
+                const response = await fetch('/ask-ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ history: chatHistory }) });
+                if (!response.ok) {
+                     const err = await response.json();
+                     throw new Error(err.error || `Server error: ${response.status}`);
+                }
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    fullResponse += chunk;
+                    aiMessageDiv.innerHTML = fullResponse.replace(/\n/g, '<br>') + '▍';
+                }
+                aiMessageDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
+                const speechBtn = document.createElement('button');
+                speechBtn.innerHTML = '朗读';
+                speechBtn.className = 'ml-2 mt-2 text-xs bg-gray-200 px-2 py-1 rounded fluent-btn';
+                speechBtn.onclick = () => playAudio(fullResponse, speechBtn);
+                aiMessageDiv.appendChild(document.createElement('br'));
+                aiMessageDiv.appendChild(speechBtn);
+
+            } catch (error) {
+                aiMessageDiv.innerText = `抱歉，请求失败: ${error.message}`; 
+                aiMessageDiv.classList.add('text-red-500');
+            } finally {
+                chatHistory.push({ role: 'assistant', content: fullResponse });
+                toggleInput(false);
+                userInput.focus();
+            }
+        };
+
+        const handleSend = () => {
+            const userText = userInput.value.trim();
+            if (userText && !isAIResponding) {
+                chatHistory.push({ role: 'user', content: userText });
+                renderMessage('user', userText);
+                userInput.value = '';
+                getAiResponse();
+            }
+        };
+        
+        sendBtn.addEventListener('click', handleSend);
+        userInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleSend());
+        
+        document.body.addEventListener('click', (e) => {
+            const btn = e.target.closest('.ask-ai-details-btn');
+            if (btn) {
+                modal.classList.remove('hidden');
+                chatLog.innerHTML = '';
+                const title = btn.dataset.bookTitle;
+                const isbn = btn.dataset.bookIsbn;
+                const initialPrompt = `你好！你是一个专业图书管理员，请提供《${title}》(ISBN: ${isbn}) 这本书的元中立、客观的内容梗概。严格遵守以下规则：\n1. 只使用所提供的书籍信息，不编造不存在的内容。\n2. 梗概长度控制在100-150字。\n3. 包含：核心主题、关键人物/论点、书籍特色。\n4. 语言风格：学术且亲切。`;
+                chatHistory = [{ role: 'user', content: initialPrompt }];
+                renderMessage('user', `请帮我介绍一下《${title}》这本书`);
+                getAiResponse();
+            }
+        });
+        
+        closeBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            if (currentAudioSource) { currentAudioSource.stop(); currentAudioSource = null; globalPlayingButton = null; }
+        });
+    };
+
+    // --- AI Search Chat Logic ---
+    const setupSearchModal = () => {
+        const modal = document.getElementById('ai-search-modal');
+        if (!modal) return;
+
+        const openBtn = document.getElementById('ai-search-open-btn');
+        const closeBtn = modal.querySelector('.close-modal-btn');
+        const chatLog = modal.querySelector('.chat-log');
+        const userInput = modal.querySelector('.user-input');
+        const sendBtn = modal.querySelector('.send-btn');
+        const recommendationsContainer = document.getElementById('ai-recommendations');
+        let isAIResponding = false;
+        
+        const renderMessage = (role, content) => {
+            const msgWrapper = document.createElement('div');
+            msgWrapper.className = `w-full flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `p-3 rounded-lg max-w-lg break-words ${role === 'user' ? 'bg-sky-100' : 'bg-white'}`;
+            msgDiv.innerHTML = content.replace(/\n/g, '<br>');
+            msgWrapper.appendChild(msgDiv);
+            chatLog.appendChild(msgWrapper);
+            chatLog.scrollTop = chatLog.scrollHeight;
+            return msgDiv;
+        };
+
+        const toggleInput = (disabled, message = '') => {
+            isAIResponding = disabled;
+            userInput.disabled = disabled;
+            if (message) userInput.placeholder = message;
+            sendBtn.disabled = disabled;
+        };
+
+        const handleSend = async () => {
+            const userQuery = userInput.value.trim();
+            if (!userQuery || isAIResponding) return;
+
+            renderMessage('user', userQuery);
+            userInput.value = '';
+            toggleInput(true, 'AI正在处理您的请求...');
+            recommendationsContainer.innerHTML = '';
+            
+            // Step 1: Expand Query
+            let expandedQuery = '';
+            try {
+                const expandRes = await fetch('/ai-expand-query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: userQuery }) });
+                if(expandRes.ok) {
+                    const expandData = await expandRes.json();
+                    if(expandData.success) expandedQuery = expandData.expanded_query;
+                }
+            } catch (e) { console.error("Query expansion failed:", e); }
+            
+            const finalQueryForRec = expandedQuery || userQuery;
+            
+            // Step 2: Get dialogue response
+            const aiMessageDiv = renderMessage('assistant', '▍');
+            let fullResponse = '';
+            try {
+                const response = await fetch('/ai-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: userQuery, expanded_query: finalQueryForRec }) });
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.error || `Server error: ${response.status}`);
+                }
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder("utf-8");
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value, { stream: true });
+                    fullResponse += chunk;
+                    aiMessageDiv.innerHTML = fullResponse.replace(/\n/g, '<br>') + '▍';
+                }
+                aiMessageDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
+                const speechBtn = document.createElement('button');
+                speechBtn.innerHTML = '朗读';
+                speechBtn.className = 'ml-2 mt-2 text-xs bg-gray-200 px-2 py-1 rounded fluent-btn';
+                speechBtn.onclick = () => playAudio('华小立为您推荐以下书籍', speechBtn);
+                aiMessageDiv.appendChild(document.createElement('br'));
+                aiMessageDiv.appendChild(speechBtn);
+
+                await fetchRecommendations(finalQueryForRec);
+            } catch (error) {
+                aiMessageDiv.innerText = `抱歉，请求失败: ${error.message}`; 
+                aiMessageDiv.classList.add('text-red-500');
+            } finally {
+                toggleInput(false, '请描述您想找的书...');
+                userInput.focus();
+            }
+        };
+        
+        const fetchRecommendations = async (query) => {
+            try {
+                const res = await fetch('/ai-recommend', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query}) });
+                const {success, recommendations} = await res.json();
+                if (!success || !recommendations.length) return;
+                
+                let recHTML = `<h4 class="text-sm font-bold text-gray-600 mb-2 mt-2 border-t pt-2">AI为您推荐了以下可借阅书籍：</h4>`;
+                recommendations.forEach(({title, code}) => {
+                    recHTML += `<div class="p-2 bg-white/80 rounded-lg flex justify-between items-center mb-2"><span class="text-sm">${title}</span><button data-code="${code}" class="borrow-rec-btn bg-theme-primary text-white px-2 py-1 text-xs fluent-btn">借阅</button></div>`;
+                });
+                recommendationsContainer.innerHTML = recHTML;
+            } catch (error) {
+                console.error("Failed to fetch recommendations:", error);
+            }
+        };
+
+        sendBtn.addEventListener('click', handleSend);
+        userInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleSend());
+        
+        openBtn.addEventListener('click', () => {
+            modal.classList.remove('hidden');
+            chatLog.innerHTML = `<div class="w-full flex justify-start"><div class="p-3 rounded-lg bg-white">你好！请用自然语言描述你想找什么样的书。</div></div>`;
+            recommendationsContainer.innerHTML = '';
+            const query = document.getElementById('main-search-input').value.trim();
+            if (query) {
+                userInput.value = query;
+                handleSend();
+            }
+        });
+        
+        closeBtn.addEventListener('click', () => {
+            modal.classList.add('hidden');
+            if (currentAudioSource) { currentAudioSource.stop(); currentAudioSource = null; globalPlayingButton = null; }
+        });
+    };
+    
+    // --- Initialize both modals ---
+    setupDetailsModal();
+    setupSearchModal();
+    
+    // --- Event Delegation for Recommendation Buttons ---
+    const recommendationsContainer = document.getElementById('ai-recommendations');
+    if(recommendationsContainer) {
+        recommendationsContainer.addEventListener('click', async (e) => {
+            const button = e.target.closest('.borrow-rec-btn');
+            if (!button || button.disabled) return;
+            
+            const bookCode = button.dataset.code;
+            button.disabled = true;
+            button.innerText = '处理中...';
+
+            try {
+                const response = await fetch(`/borrow-by-code/${bookCode}`, { method: 'POST' });
+                const result = await response.json();
+                if (result.success) {
+                    button.className = 'bg-gray-400 text-white px-2 py-1 text-xs fluent-btn cursor-not-allowed';
+                    button.innerText = '已借阅';
+                    setTimeout(() => window.location.reload(), 1000); 
+                } else {
+                    button.innerText = '失败';
+                    button.title = result.message;
+                    button.className = 'bg-red-500 text-white px-2 py-1 text-xs fluent-btn';
+                    button.disabled = false;
+                }
+            } catch {
+                button.innerText = '错误';
+                button.className = 'bg-red-500 text-white px-2 py-1 text-xs fluent-btn';
+                button.disabled = false;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

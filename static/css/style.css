@@ -1,0 +1,15 @@
+/*
+  This file can be used for any custom CSS that is difficult 
+  to achieve with Tailwind's utility classes.
+  For this project, most styling is handled directly in the HTML
+  with Tailwind classes for simplicity and speed.
+*/
+
+body {
+    /* You can define global font settings or other base styles here */
+}
+
+/* Example of a custom style if needed */
+.custom-shadow {
+    box-shadow: 0 10px 15px -3px rgba(170, 43, 48, 0.1), 0 4px 6px -2px rgba(170, 43, 48, 0.05);
+}

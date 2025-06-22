@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+
+{% block title %}修改密码{% endblock %}
+
+{% block content %}
+<div class="max-w-xl mx-auto">
+    <div class="fluent-card">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6 text-center">修改您的密码</h2>
+        <form method="POST" action="{{ url_for('profile') }}" class="space-y-6">
+            <div>
+                <label for="old_password" class="block text-sm font-medium text-gray-700">当前密码</label>
+                <input id="old_password" name="old_password" type="password" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-theme-primary/50">
+            </div>
+            <div>
+                <label for="new_password" class="block text-sm font-medium text-gray-700">新密码</label>
+                <input id="new_password" name="new_password" type="password" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-theme-primary/50">
+            </div>
+            <div>
+                <label for="confirm_password" class="block text-sm font-medium text-gray-700">确认新密码</label>
+                <input id="confirm_password" name="confirm_password" type="password" required class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-theme-primary/50">
+            </div>
+            <div>
+                <button type="submit" class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-theme-primary hover:bg-theme-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-theme-primary fluent-btn">
+                    确认修改
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

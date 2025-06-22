@@ -1,0 +1,67 @@
+{% extends "layout.html" %}
+{% from '_macros.html' import render_pagination with context %}
+
+{% block title %}我的借阅记录{% endblock %}
+
+{% block content %}
+<div class="fluent-card">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-gray-800">我的借阅记录</h2>
+        {% if borrowed_count > 0 %}
+        <form action="{{ url_for('return_all_books') }}" method="POST">
+            <button type="submit" class="bg-green-600 text-white px-4 py-2 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 fluent-btn">
+                一键归还全部 ({{ borrowed_count }})
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50/50">
+                <tr>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">书名</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">借阅日期</th>
+                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">应还日期</th>
+                    <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">状态</th>
+                    <th scope="col" class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white/50 divide-y divide-gray-200">
+                {% for record in records_pagination.items %}
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ record.book.title }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ record.borrow_date.strftime('%Y-%m-%d') }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ record.due_date.strftime('%Y-%m-%d') }}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center">
+                        {% if record.status == 'returned' %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">已归还</span>
+                        {% else %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">借阅中</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                        {% if record.status == 'borrowed' %}
+                        <form action="{{ url_for('return_book', record_id=record.id) }}" method="POST">
+                            <button type="submit" class="text-white bg-theme-primary hover:bg-theme-primary-dark px-3 py-1 fluent-btn">归还</button>
+                        </form>
+                        {% else %}
+                        <span class="text-gray-400">--</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="px-6 py-4 text-center text-gray-500">您还没有任何借阅记录。</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- **更新**: 修复了分页宏的调用方式 -->
+    {% if records_pagination.pages > 1 %}
+        {{ render_pagination(records_pagination, 'my_records') }}
+    {% endif %}
+</div>
+{% endblock %}

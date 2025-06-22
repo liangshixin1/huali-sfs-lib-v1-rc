@@ -1,0 +1,273 @@
+{% extends "layout.html" %}
+
+{% block title %}用户登录{% endblock %}
+
+{% block content %}
+<style>
+    /* 简洁的登录页面样式 */
+    .login-container {
+        min-height: calc(100vh - 200px);
+        background-image: url('/static/background.png');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+
+    /* 左侧登录区域 */
+    .login-left {
+        width: 100%;
+        max-width: 450px;
+        padding: 2rem;
+    }
+
+    /* 简洁毛玻璃卡片 */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 16px;
+        padding: 2.5rem;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    /* 标题 */
+    .login-title {
+        color: white;
+        font-size: 1.875rem;
+        font-weight: 600;
+        margin-bottom: 2rem;
+        text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Tab按钮 */
+    .tab-button {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.8);
+        padding: 12px 20px;
+        transition: all 0.2s ease;
+        font-weight: 500;
+    }
+
+    .tab-button.active {
+        background: rgba(255, 255, 255, 0.2);
+        color: white;
+        border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    .tab-button:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+    }
+
+    /* 输入框标签 */
+    .input-label {
+        color: white;
+        font-weight: 500;
+        font-size: 0.875rem;
+        margin-bottom: 8px;
+        display: block;
+    }
+
+    /* 毛玻璃输入框 */
+    .glass-input {
+        background: rgba(255, 255, 255, 0.1) !important;
+        backdrop-filter: blur(10px) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        border-radius: 12px !important;
+        color: white !important;
+        padding: 14px 16px !important;
+        width: 100%;
+        transition: all 0.2s ease !important;
+    }
+
+    .glass-input::placeholder {
+        color: rgba(255, 255, 255, 0.6) !important;
+    }
+
+    .glass-input:focus {
+        background: rgba(255, 255, 255, 0.15) !important;
+        border-color: rgba(255, 255, 255, 0.4) !important;
+        outline: none !important;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1) !important;
+    }
+
+    /* 登录按钮 */
+    .glass-button {
+        background: rgba(255, 255, 255, 0.15) !important;
+        backdrop-filter: blur(10px) !important;
+        -webkit-backdrop-filter: blur(10px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.3) !important;
+        border-radius: 12px !important;
+        color: white !important;
+        font-weight: 600 !important;
+        padding: 14px 24px !important;
+        width: 100%;
+        transition: all 0.2s ease !important;
+    }
+
+    .glass-button:hover {
+        background: rgba(255, 255, 255, 0.2) !important;
+        border-color: rgba(255, 255, 255, 0.4) !important;
+    }
+
+    .glass-button:active {
+        transform: scale(0.98) !important;
+    }
+
+    /* 响应式调整 */
+    @media (max-width: 768px) {
+        .login-container {
+            justify-content: center;
+        }
+        
+        .login-left {
+            max-width: 100%;
+            padding: 1rem;
+        }
+        
+        .glass-card {
+            padding: 2rem;
+        }
+    }
+
+    @media (min-width: 769px) {
+        .login-left {
+            margin-left: 4rem;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .login-left {
+            margin-left: 6rem;
+        }
+    }
+</style>
+
+<div class="login-container">
+    <div class="login-left">
+        <div class="glass-card">
+            <h2 class="login-title">欢迎回来</h2>
+            
+            <!-- Tab按钮 -->
+            <div class="mb-6">
+                <div class="flex gap-2" id="loginTab">
+                    <button class="tab-button flex-1 text-center" data-tab="faculty">
+                        教职工登录
+                    </button>
+                    <button class="tab-button flex-1 text-center" data-tab="admin">
+                        管理员登录
+                    </button>
+                </div>
+            </div>
+
+            <!-- 教职工登录表单 -->
+            <form id="faculty-form" method="POST" action="{{ url_for('login') }}" class="space-y-5">
+                <input type="hidden" name="type" value="faculty">
+                
+                <div>
+                    <label for="faculty-username" class="input-label">工号</label>
+                    <input id="faculty-username" 
+                           name="username" 
+                           type="text" 
+                           required 
+                           class="glass-input"
+                           placeholder="请输入您的工号">
+                </div>
+                
+                <div>
+                    <label for="faculty-password" class="input-label">密码</label>
+                    <input id="faculty-password" 
+                           name="password" 
+                           type="password" 
+                           required 
+                           class="glass-input"
+                           placeholder="默认为身份证后四位">
+                </div>
+                
+                <div class="pt-2">
+                    <button type="submit" class="glass-button">
+                        登 录
+                    </button>
+                </div>
+            </form>
+
+            <!-- 管理员登录表单 -->
+            <form id="admin-form" method="POST" action="{{ url_for('login') }}" class="space-y-5 hidden">
+                <input type="hidden" name="type" value="admin">
+                
+                <div>
+                    <label for="admin-username" class="input-label">管理员账户</label>
+                    <input id="admin-username" 
+                           name="username" 
+                           type="text" 
+                           required 
+                           class="glass-input"
+                           placeholder="请输入管理员账户">
+                </div>
+                
+                <div>
+                    <label for="admin-password" class="input-label">密码</label>
+                    <input id="admin-password" 
+                           name="password" 
+                           type="password" 
+                           required 
+                           class="glass-input"
+                           placeholder="请输入管理员密码">
+                </div>
+                
+                <div class="pt-2">
+                    <button type="submit" class="glass-button">
+                        管理员登录
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tabButtons = document.querySelectorAll('#loginTab button');
+    const facultyForm = document.getElementById('faculty-form');
+    const adminForm = document.getElementById('admin-form');
+
+    function switchTab(tab) {
+        // 更新tab按钮状态
+        tabButtons.forEach(button => {
+            if (button.dataset.tab === tab) {
+                button.classList.add('active');
+            } else {
+                button.classList.remove('active');
+            }
+        });
+
+        // 切换表单显示
+        if (tab === 'admin') {
+            facultyForm.classList.add('hidden');
+            adminForm.classList.remove('hidden');
+        } else {
+            facultyForm.classList.remove('hidden');
+            adminForm.classList.add('hidden');
+        }
+    }
+
+    // 默认选择教职工登录
+    switchTab('faculty');
+
+    // 绑定tab切换事件
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            switchTab(button.dataset.tab);
+        });
+    });
+});
+</script>
+
+{% endblock %}
