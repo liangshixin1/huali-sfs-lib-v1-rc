@@ -4,6 +4,7 @@
 {% block title %}图书查询与借阅{% endblock %}
 
 {% block content %}
+<!-- 搜索区域 - 保持原有功能 -->
 <div class="fluent-card mb-6">
     <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">图书查询</h2>
     <div class="flex flex-col sm:flex-row gap-4">
@@ -26,18 +27,37 @@
     </div>
 </div>
 
-<!-- 搜索建议框 - 放在body级别以避免层叠问题 -->
+<!-- 搜索建议框 -->
 <div id="search-suggestions" class="fixed bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto hidden" style="z-index: 9999;">
-    <!-- 动态填充搜索建议 -->
 </div>
 
+<!-- 查询结果 - 现代化Bento Grid布局 -->
 <div class="fluent-card">
-    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
-        <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">查询结果</h2>
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">查询结果</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                找到 <span class="font-medium text-theme-primary dark:text-theme-primary">{{ books_pagination.total }}</span> 本图书
+            </p>
+        </div>
         
-        <!-- 排序控件 -->
-        <div class="flex items-center gap-2 text-sm">
-            <label class="text-gray-600 dark:text-gray-400">排序：</label>
+        <!-- 排序和视图控件 -->
+        <div class="flex items-center gap-4">
+            <!-- 视图切换按钮 -->
+            <div class="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                <button id="grid-view-btn" class="p-2 rounded-md transition-colors view-toggle active">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path>
+                    </svg>
+                </button>
+                <button id="list-view-btn" class="p-2 rounded-md transition-colors view-toggle">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- 排序控件 -->
             <form method="GET" id="sort-form" class="flex items-center gap-2">
                 <input type="hidden" name="search_query" value="{{ search_query }}">
                 <select name="sort_by" id="sort-by" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-theme-primary/50 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
@@ -54,162 +74,985 @@
         </div>
     </div>
     
-    <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
-            <thead class="bg-gray-50/50 dark:bg-gray-800/50">
-                <tr>
-                    <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">书名</th>
-                    <th class="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">书柜号</th>
-                    <th class="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">图书编码</th>
-                    <th class="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">库存状态</th>
-                    <th class="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
-                    <th class="hidden sm:table-cell px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">AI问答</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white/50 dark:bg-gray-800/50 divide-y divide-gray-200 dark:divide-gray-600">
-                {% for book in books_pagination.items %}
-                <tr class="hover:bg-gray-50/70 dark:hover:bg-gray-700/70 transition-colors">
-                    <td class="px-3 sm:px-6 py-4">
-                        <div class="flex items-start justify-between">
-                            <div class="flex-grow">
-                                <div class="font-medium text-gray-900 dark:text-gray-100">{{ book.title }}</div>
-                                <div class="sm:hidden text-xs text-gray-500 dark:text-gray-400 mt-1 space-x-3">
-                                    <span>{{ book.bookshelf_number }}</span>
-                                    <span>{{ book.book_code }}</span>
-                                </div>
-                            </div>
-                            <!-- 移动端AI按钮 - 紧凑设计 -->
-                            <button class="ask-ai-details-btn sm:hidden ml-2 flex-shrink-0 p-2 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/30 transition-colors border border-sky-200 dark:border-sky-700" 
-                                    data-book-title="{{ book.title }}" 
-                                    data-book-isbn="{{ book.isbn }}" 
-                                    title="询问AI获取书籍梗概">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-sky-500 dark:text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                                </svg>
-                            </button>
-                        </div>
-                    </td>
-                    <td class="hidden sm:table-cell px-6 py-4 text-gray-500 dark:text-gray-400">{{ book.bookshelf_number }}</td>
-                    <td class="hidden sm:table-cell px-6 py-4 text-gray-500 dark:text-gray-400">{{ book.book_code }}</td>
-                    <td class="px-3 sm:px-6 py-4 text-center">
-                        {% if book.quantity_available > 0 %}
-                            <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
-                                可借 ({{ book.quantity_available }}/{{ book.stock }})
-                            </span>
-                        {% else %}
-                            <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
-                                已借完
-                            </span>
-                        {% endif %}
-                    </td>
-                    <td class="px-3 sm:px-6 py-4 text-center">
-                        <div class="flex flex-col sm:flex-row gap-1 sm:gap-2 justify-center items-center">
-                            <!-- 主要操作按钮 -->
-                            {% if book.quantity_available > 0 %}
-                                {% if not current_user.records | selectattr('book_id', 'equalto', book.id) | selectattr('status', 'equalto', 'borrowed') | list %}
-                                <form method="POST" action="{{ url_for('borrow_book', book_id=book.id) }}" class="inline">
-                                    <!-- 移动端：图标按钮，桌面端：文字按钮 -->
-                                    <button type="submit" class="text-white bg-theme-primary hover:bg-theme-primary-dark fluent-btn sm:px-4 sm:py-2 px-3 py-2 text-sm flex items-center justify-center" title="借阅图书">
-                                        <span class="sm:hidden">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                            </svg>
-                                        </span>
-                                        <span class="hidden sm:inline">借阅</span>
-                                    </button>
-                                </form>
-                                {% else %}
-                                <span class="text-gray-400 dark:text-gray-500 text-sm px-3 py-2">
-                                    <span class="sm:hidden">已借</span>
-                                    <span class="hidden sm:inline">已借阅</span>
-                                </span>
-                                {% endif %}
-                            {% else %}
-                                {% if not current_user.has_wanted(book) %}
-                                <form method="POST" action="{{ url_for('want_book', book_id=book.id) }}" class="inline">
-                                    <button type="submit" class="text-white bg-sky-500 hover:bg-sky-600 fluent-btn sm:px-4 sm:py-2 px-3 py-2 text-sm flex items-center justify-center" title="想要此书">
-                                        <span class="sm:hidden">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                                            </svg>
-                                        </span>
-                                        <span class="hidden sm:inline">想要</span>
-                                    </button>
-                                </form>
-                                {% else %}
-                                <span class="text-gray-400 dark:text-gray-500 text-sm px-3 py-2">
-                                    <span class="sm:hidden">已想要</span>
-                                    <span class="hidden sm:inline">已想要</span>
-                                </span>
-                                {% endif %}
-                            {% endif %}
-                        </div>
-                    </td>
-                    <!-- 桌面端AI按钮保持原样 -->
-                    <td class="hidden sm:table-cell px-6 py-4 text-center">
-                         <button class="ask-ai-details-btn" data-book-title="{{ book.title }}" data-book-isbn="{{ book.isbn }}" title="询问AI获取书籍梗概">
-                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-sky-500 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                         </button>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
-                        <div class="flex flex-col items-center">
-                            <svg class="h-12 w-12 text-gray-300 dark:text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                            </svg>
-                            <p>没有找到匹配的图书</p>
-                            <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">尝试使用不同的关键词或使用AI搜书功能</p>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <!-- 加载骨架屏 -->
+    <div id="loading-skeleton" class="hidden">
+        <div class="bento-grid">
+            {% for i in range(6) %}
+            <div class="book-card skeleton-card">
+                <div class="flex justify-between items-start mb-3">
+                    <div class="skeleton skeleton-title"></div>
+                    <div class="skeleton skeleton-icon"></div>
+                </div>
+                <div class="skeleton skeleton-text mb-2"></div>
+                <div class="skeleton skeleton-text-short mb-4"></div>
+                <div class="flex justify-between items-center">
+                    <div class="skeleton skeleton-status"></div>
+                    <div class="skeleton skeleton-button"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
     </div>
-    {% if books_pagination.pages > 1 %}{{ render_pagination(books_pagination, 'index', query_params={'search_query': search_query, 'sort_by': sort_by, 'sort_order': sort_order}) }}{% endif %}
+    
+    <!-- Bento Grid 图书展示 -->
+    <div id="books-container">
+        {% if books_pagination.items %}
+        <div class="bento-grid" id="grid-view">
+            {% for book in books_pagination.items %}
+            <div class="book-card" data-book-id="{{ book.id }}">
+                <!-- 状态指示条 -->
+                <div class="status-bar {{ 'available' if book.quantity_available > 0 else 'unavailable' }}"></div>
+                
+                <!-- 卡片头部 -->
+                <div class="card-header">
+                    <div class="book-info flex-grow">
+                        <h3 class="book-title">{{ book.title }}</h3>
+                        <div class="book-meta">
+                            <span class="meta-item">
+                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm0 2h12v8H4V6z"></path>
+                                </svg>
+                                {{ book.bookshelf_number }}
+                            </span>
+                            <span class="meta-item">
+                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732L14.146 12.8l-1.179 4.456a1 1 0 01-1.934 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732L9.854 7.2l1.179-4.456A1 1 0 0112 2z" clip-rule="evenodd"></path>
+                                </svg>
+                                {{ book.book_code }}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- AI 按钮 -->
+                    <button class="ask-ai-details-btn ai-btn-modern" 
+                            data-book-title="{{ book.title }}" 
+                            data-book-isbn="{{ book.isbn }}" 
+                            title="询问AI获取书籍详情">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- 库存状态 -->
+                <div class="status-section">
+                    {% if book.quantity_available > 0 %}
+                        <div class="status-badge available">
+                            <div class="status-dot"></div>
+                            <span>可借 {{ book.quantity_available }}/{{ book.stock }}</span>
+                        </div>
+                    {% else %}
+                        <div class="status-badge unavailable">
+                            <div class="status-dot"></div>
+                            <span>已借完</span>
+                        </div>
+                    {% endif %}
+                </div>
+                
+                <!-- 操作按钮 -->
+                <div class="card-actions">
+                    {% if book.quantity_available > 0 %}
+                        {% if not current_user.records | selectattr('book_id', 'equalto', book.id) | selectattr('status', 'equalto', 'borrowed') | list %}
+                        <form method="POST" action="{{ url_for('borrow_book', book_id=book.id) }}" class="action-form">
+                            <button type="submit" class="action-btn primary" title="借阅图书">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                </svg>
+                                <span class="hidden sm:inline">借阅</span>
+                            </button>
+                        </form>
+                        {% else %}
+                        <div class="action-btn disabled">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="hidden sm:inline">已借阅</span>
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        {% if not current_user.has_wanted(book) %}
+                        <form method="POST" action="{{ url_for('want_book', book_id=book.id) }}" class="action-form">
+                            <button type="submit" class="action-btn secondary" title="想要此书">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                </svg>
+                                <span class="hidden sm:inline">想要</span>
+                            </button>
+                        </form>
+                        {% else %}
+                        <div class="action-btn disabled">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span class="hidden sm:inline">已想要</span>
+                        </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- 列表视图（备用） -->
+        <div class="list-view hidden" id="list-view">
+            {% for book in books_pagination.items %}
+            <div class="book-list-item">
+                <div class="list-item-content">
+                    <div class="book-title">{{ book.title }}</div>
+                    <div class="book-meta-list">{{ book.bookshelf_number }} • {{ book.book_code }}</div>
+                </div>
+                <div class="list-item-actions">
+                    {% if book.quantity_available > 0 %}
+                        <span class="status-mini available">可借</span>
+                    {% else %}
+                        <span class="status-mini unavailable">已借完</span>
+                    {% endif %}
+                    <button class="ask-ai-details-btn ai-btn-mini" data-book-title="{{ book.title }}" data-book-isbn="{{ book.isbn }}">
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        {% else %}
+        <!-- 空状态 -->
+        <div class="empty-state">
+            <div class="empty-icon">
+                <svg class="w-20 h-20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                </svg>
+            </div>
+            <h3 class="empty-title">没有找到匹配的图书</h3>
+            <p class="empty-description">尝试使用不同的关键词或使用AI搜书功能</p>
+            <button id="ai-search-trigger" class="empty-action-btn">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                尝试AI搜书
+            </button>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- 分页 -->
+    {% if books_pagination.pages > 1 %}
+    <div class="pagination-container">
+        {{ render_pagination(books_pagination, 'index', query_params={'search_query': search_query, 'sort_by': sort_by, 'sort_order': sort_order}) }}
+    </div>
+    {% endif %}
 </div>
 
 <!-- AI Book Details Modal -->
-<div id="ai-details-modal" class="fixed inset-0 bg-black bg-opacity-60 dark:bg-black dark:bg-opacity-80 z-50 hidden items-center justify-center p-4">
-    <div class="fluent-card w-full max-w-2xl mx-auto flex flex-col modal-mobile" style="height: 80vh;">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200"><span class="text-sky-500 dark:text-sky-400">AI</span> 图书管理员</h2>
-            <button class="close-modal-btn text-2xl hover:text-gray-600 dark:hover:text-gray-400 text-gray-500 dark:text-gray-400 p-1">&times;</button>
+<div id="ai-details-modal" class="fixed inset-0 bg-black/60 dark:bg-black/80 z-50 hidden items-center justify-center p-4">
+    <div class="modal-container w-full max-w-2xl mx-auto flex flex-col" style="height: 80vh;">
+        <div class="modal-header">
+            <h2 class="modal-title">
+                <span class="ai-gradient">AI</span> 图书管理员
+            </h2>
+            <button class="close-modal-btn">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
         </div>
-        <div class="chat-log flex-grow space-y-4 overflow-y-auto p-4 bg-gray-50/80 dark:bg-gray-800/80 rounded-lg"></div>
-        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 flex gap-2">
-            <input type="text" class="user-input flex-grow w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400" placeholder="可以继续提问..." disabled>
-            <button class="send-btn bg-sky-500 text-white px-4 py-2 fluent-btn" disabled>发送</button>
+        <div class="chat-log flex-grow overflow-y-auto"></div>
+        <div class="modal-footer">
+            <input type="text" class="user-input" placeholder="可以继续提问..." disabled>
+            <button class="send-btn" disabled>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                </svg>
+            </button>
         </div>
     </div>
 </div>
 
 <!-- AI Search Modal -->
-<div id="ai-search-modal" class="fixed inset-0 bg-black bg-opacity-60 dark:bg-black dark:bg-opacity-80 z-50 hidden items-center justify-center p-4">
-    <div class="fluent-card w-full max-w-2xl mx-auto flex flex-col modal-mobile" style="height: 80vh;">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">AI 智能搜书</h2>
-            <button class="close-modal-btn text-2xl hover:text-gray-600 dark:hover:text-gray-400 text-gray-500 dark:text-gray-400 p-1">&times;</button>
+<div id="ai-search-modal" class="fixed inset-0 bg-black/60 dark:bg-black/80 z-50 hidden items-center justify-center p-4">
+    <div class="modal-container w-full max-w-2xl mx-auto flex flex-col" style="height: 80vh;">
+        <div class="modal-header">
+            <h2 class="modal-title">AI 智能搜书</h2>
+            <button class="close-modal-btn">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
         </div>
-        <div class="chat-log flex-grow space-y-4 overflow-y-auto p-4 bg-gray-50/80 dark:bg-gray-800/80 rounded-lg">
-            <div class="w-full flex justify-start">
-                <div class="p-3 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">你好！请用自然语言描述你想找什么样的书。</div>
+        <div class="chat-log flex-grow overflow-y-auto">
+            <div class="initial-message">
+                <div class="message assistant">
+                    <div class="message-content">你好！请用自然语言描述你想找什么样的书。</div>
+                </div>
             </div>
         </div>
-        <div id="ai-recommendations" class="mt-2 p-2 border-t border-gray-200 dark:border-gray-600"></div>
-        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 flex gap-2">
-            <input type="text" class="user-input flex-grow w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400" placeholder="请描述您想找的书...">
-            <button class="send-btn bg-sky-500 text-white px-4 py-2 fluent-btn">发送</button>
+        <div id="ai-recommendations" class="recommendations-container"></div>
+        <div class="modal-footer">
+            <input type="text" class="user-input" placeholder="请描述您想找的书...">
+            <button class="send-btn">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+                </svg>
+            </button>
         </div>
     </div>
 </div>
 
+<style>
+/* 现代化CSS变量系统 */
+:root {
+    /* 主色调 */
+    --primary: #AA2B30;
+    --primary-dark: #882226;
+    --primary-light: #d63384;
+    
+    /* 功能色 */
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #3b82f6;
+    
+    /* 中性色 - 浅色模式 */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8fafc;
+    --bg-tertiary: #f1f5f9;
+    --surface: rgba(255, 255, 255, 0.9);
+    --surface-elevated: rgba(255, 255, 255, 0.95);
+    
+    /* 文字色 */
+    --text-primary: #1f2937;
+    --text-secondary: #6b7280;
+    --text-tertiary: #9ca3af;
+    
+    /* 边框色 */
+    --border-primary: #e5e7eb;
+    --border-secondary: #d1d5db;
+    
+    /* 阴影 */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    
+    /* 渐变 */
+    --gradient-primary: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    --gradient-success: linear-gradient(135deg, var(--success) 0%, #34d399 100%);
+    --gradient-ai: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    
+    /* 动画 */
+    --transition-fast: 0.15s ease;
+    --transition-normal: 0.3s ease;
+    --transition-slow: 0.5s ease;
+    
+    /* 间距 */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
+    
+    /* 圆角 */
+    --radius-sm: 0.375rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-2xl: 1.5rem;
+}
+
+/* 深色模式变量 */
+.dark {
+    /* 背景色 */
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-tertiary: #334155;
+    --surface: rgba(30, 41, 59, 0.9);
+    --surface-elevated: rgba(30, 41, 59, 0.95);
+    
+    /* 文字色 */
+    --text-primary: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-tertiary: #94a3b8;
+    
+    /* 边框色 */
+    --border-primary: #475569;
+    --border-secondary: #64748b;
+    
+    /* 阴影适配深色模式 */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
+/* Bento Grid 布局系统 */
+.bento-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: var(--spacing-lg);
+    padding: var(--spacing-sm);
+}
+
+@media (min-width: 640px) {
+    .bento-grid {
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        padding: var(--spacing-md);
+    }
+}
+
+@media (min-width: 1024px) {
+    .bento-grid {
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    }
+}
+
+/* 现代卡片设计 */
+.book-card {
+    background: var(--surface-elevated);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-2xl);
+    padding: var(--spacing-lg);
+    transition: all var(--transition-normal);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+}
+
+.book-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+    opacity: 0;
+    transition: opacity var(--transition-normal);
+}
+
+.book-card:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: var(--shadow-xl);
+    border-color: var(--border-secondary);
+}
+
+.book-card:hover::before {
+    opacity: 1;
+}
+
+/* 状态指示条 */
+.status-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+    background: var(--gradient-success);
+}
+
+.status-bar.unavailable {
+    background: linear-gradient(90deg, var(--warning) 0%, #fbbf24 100%);
+}
+
+/* 卡片头部 */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--spacing-md);
+    gap: var(--spacing-md);
+}
+
+.book-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    line-height: 1.4;
+    margin-bottom: var(--spacing-xs);
+}
+
+.book-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    background: var(--bg-tertiary);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-md);
+    font-weight: 500;
+}
+
+/* AI按钮现代化 */
+.ai-btn-modern {
+    background: var(--gradient-ai);
+    border: none;
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-sm);
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
+}
+
+.ai-btn-modern::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left var(--transition-slow);
+}
+
+.ai-btn-modern:hover::before {
+    left: 100%;
+}
+
+.ai-btn-modern:hover {
+    transform: scale(1.05);
+    box-shadow: var(--shadow-lg);
+}
+
+.ai-btn-modern:active {
+    transform: scale(0.95);
+}
+
+/* 状态徽章 */
+.status-section {
+    margin-bottom: var(--spacing-md);
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.status-badge.available {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.status-badge.unavailable {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+}
+
+/* 操作按钮 */
+.card-actions {
+    display: flex;
+    gap: var(--spacing-sm);
+}
+
+.action-form {
+    flex: 1;
+}
+
+.action-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-lg);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all var(--transition-normal);
+    border: none;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.action-btn.primary {
+    background: var(--gradient-primary);
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.action-btn.primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.action-btn.secondary {
+    background: var(--gradient-success);
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.action-btn.secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.action-btn.disabled {
+    background: var(--bg-tertiary);
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+}
+
+/* 视图切换按钮 */
+.view-toggle {
+    color: var(--text-secondary);
+}
+
+.view-toggle.active {
+    background: var(--primary);
+    color: white;
+}
+
+/* 列表视图 */
+.list-view {
+    space-y: var(--spacing-sm);
+}
+
+.book-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-md);
+    background: var(--surface);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-fast);
+}
+
+.book-list-item:hover {
+    background: var(--surface-elevated);
+    transform: translateX(4px);
+}
+
+.list-item-content {
+    flex: 1;
+}
+
+.list-item-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.status-mini {
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.status-mini.available {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+
+.status-mini.unavailable {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--warning);
+}
+
+.ai-btn-mini {
+    background: var(--gradient-ai);
+    border: none;
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xs);
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.ai-btn-mini:hover {
+    transform: scale(1.1);
+}
+
+/* 空状态设计 */
+.empty-state {
+    text-align: center;
+    padding: var(--spacing-2xl);
+}
+
+.empty-icon {
+    color: var(--text-tertiary);
+    margin-bottom: var(--spacing-lg);
+}
+
+.empty-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: var(--spacing-sm);
+}
+
+.empty-description {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-lg);
+}
+
+.empty-action-btn {
+    display: inline-flex;
+    align-items: center;
+    background: var(--gradient-ai);
+    color: white;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    font-weight: 500;
+    transition: all var(--transition-normal);
+    border: none;
+    cursor: pointer;
+}
+
+.empty-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+/* 骨架屏加载效果 */
+.skeleton-card {
+    pointer-events: none;
+}
+
+.skeleton {
+    background: linear-gradient(90deg, 
+        var(--bg-tertiary) 25%, 
+        var(--bg-secondary) 50%, 
+        var(--bg-tertiary) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: var(--radius-md);
+}
+
+@keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.skeleton-title {
+    height: 1.5rem;
+    width: 70%;
+    margin-bottom: var(--spacing-sm);
+}
+
+.skeleton-text {
+    height: 1rem;
+    width: 90%;
+}
+
+.skeleton-text-short {
+    height: 1rem;
+    width: 60%;
+}
+
+.skeleton-status {
+    height: 1.5rem;
+    width: 80px;
+    border-radius: var(--radius-lg);
+}
+
+.skeleton-button {
+    height: 2.5rem;
+    width: 100px;
+    border-radius: var(--radius-lg);
+}
+
+.skeleton-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-lg);
+}
+
+/* 模态框现代化 */
+.modal-container {
+    background: var(--surface-elevated);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-xl);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    overflow: hidden;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-lg);
+    border-bottom: 1px solid var(--border-primary);
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.ai-gradient {
+    background: var(--gradient-ai);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.close-modal-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+}
+
+.close-modal-btn:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.chat-log {
+    padding: var(--spacing-lg);
+    background: var(--bg-secondary);
+    space-y: var(--spacing-md);
+}
+
+.modal-footer {
+    display: flex;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-lg);
+    border-top: 1px solid var(--border-primary);
+}
+
+.user-input {
+    flex: 1;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-lg);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    transition: all var(--transition-fast);
+}
+
+.user-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(170, 43, 48, 0.1);
+}
+
+.send-btn {
+    background: var(--gradient-primary);
+    border: none;
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-sm) var(--spacing-md);
+    color: white;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+}
+
+.send-btn:hover {
+    transform: scale(1.05);
+    box-shadow: var(--shadow-md);
+}
+
+.send-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* 聊天消息样式 */
+.message {
+    margin-bottom: var(--spacing-md);
+}
+
+.message.user {
+    text-align: right;
+}
+
+.message.assistant {
+    text-align: left;
+}
+
+.message-content {
+    display: inline-block;
+    max-width: 80%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-lg);
+    word-break: break-word;
+}
+
+.message.user .message-content {
+    background: var(--gradient-primary);
+    color: white;
+}
+
+.message.assistant .message-content {
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
+}
+
+/* 推荐容器 */
+.recommendations-container {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 0 var(--spacing-lg);
+}
+
+/* 分页容器 */
+.pagination-container {
+    margin-top: var(--spacing-xl);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--border-primary);
+}
+
+/* 响应式优化 */
+@media (max-width: 640px) {
+    .bento-grid {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-md);
+        padding: var(--spacing-xs);
+    }
+    
+    .book-card {
+        padding: var(--spacing-md);
+    }
+    
+    .card-header {
+        gap: var(--spacing-sm);
+    }
+    
+    .book-title {
+        font-size: 1rem;
+    }
+    
+    .meta-item {
+        font-size: 0.75rem;
+        padding: 2px var(--spacing-xs);
+    }
+    
+    .modal-container {
+        margin: var(--spacing-md);
+        height: calc(100vh - 2rem) !important;
+        max-height: none;
+    }
+    
+    .modal-header,
+    .modal-footer,
+    .chat-log {
+        padding: var(--spacing-md);
+    }
+}
+
+/* 性能优化 */
+.book-card,
+.action-btn,
+.ai-btn-modern {
+    will-change: transform;
+}
+
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+    .book-card:hover {
+        transform: none;
+    }
+    
+    .action-btn:hover {
+        transform: none;
+    }
+    
+    .ai-btn-modern:hover {
+        transform: none;
+    }
+}
+
+/* 无障碍访问 */
+.book-card:focus-within {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+.action-btn:focus,
+.ai-btn-modern:focus {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+}
+
+/* 打印样式 */
+@media print {
+    .book-card {
+        box-shadow: none;
+        border: 1px solid #ddd;
+        page-break-inside: avoid;
+    }
+    
+    .ai-btn-modern,
+    .action-btn {
+        display: none;
+    }
+}
+
+/* 高对比度模式支持 */
+@media (prefers-contrast: high) {
+    .book-card {
+        border: 2px solid var(--text-primary);
+    }
+    
+    .action-btn {
+        border: 2px solid currentColor;
+    }
+}
+
+/* 减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+</style>
+
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    // 初始化加载动画
+    const showLoading = () => {
+        document.getElementById('books-container').style.display = 'none';
+        document.getElementById('loading-skeleton').classList.remove('hidden');
+    };
     
-    // --- 搜索建议功能 ---
+    const hideLoading = () => {
+        document.getElementById('loading-skeleton').classList.add('hidden');
+        document.getElementById('books-container').style.display = 'block';
+    };
+    
+    // 搜索建议功能（保持原有逻辑）
     const searchInput = document.getElementById('main-search-input');
     const suggestionsBox = document.getElementById('search-suggestions');
     const searchContainer = document.getElementById('search-container');
@@ -240,7 +1083,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 计算搜索框的位置
         const inputRect = searchInput.getBoundingClientRect();
         const containerRect = searchContainer.getBoundingClientRect();
         
@@ -263,7 +1105,6 @@ document.addEventListener('DOMContentLoaded', () => {
         suggestionsBox.innerHTML = html;
         suggestionsBox.classList.remove('hidden');
         
-        // 绑定点击事件
         suggestionsBox.querySelectorAll('.suggestion-item').forEach(item => {
             item.addEventListener('click', () => {
                 const text = item.dataset.text;
@@ -292,7 +1133,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // 搜索输入事件
     searchInput.addEventListener('input', (e) => {
         clearTimeout(searchTimeout);
         const query = e.target.value.trim();
@@ -307,10 +1147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 300);
     });
 
-    // 键盘导航
     searchInput.addEventListener('keydown', (e) => {
-        const suggestions = suggestionsBox.querySelectorAll('.suggestion-item');
-        
         switch (e.key) {
             case 'ArrowDown':
                 e.preventDefault();
@@ -337,14 +1174,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 点击外部隐藏建议
     document.addEventListener('click', (e) => {
         if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
             hideSuggestions();
         }
     });
 
-    // 窗口大小变化时重新计算位置
     window.addEventListener('resize', () => {
         if (!suggestionsBox.classList.contains('hidden')) {
             const inputRect = searchInput.getBoundingClientRect();
@@ -356,19 +1191,55 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- 排序功能 ---
+    // 视图切换功能
+    const gridViewBtn = document.getElementById('grid-view-btn');
+    const listViewBtn = document.getElementById('list-view-btn');
+    const gridView = document.getElementById('grid-view');
+    const listView = document.getElementById('list-view');
+
+    gridViewBtn?.addEventListener('click', () => {
+        gridViewBtn.classList.add('active');
+        listViewBtn.classList.remove('active');
+        gridView.classList.remove('hidden');
+        listView.classList.add('hidden');
+        localStorage.setItem('viewMode', 'grid');
+    });
+
+    listViewBtn?.addEventListener('click', () => {
+        listViewBtn.classList.add('active');
+        gridViewBtn.classList.remove('active');
+        listView.classList.remove('hidden');
+        gridView.classList.add('hidden');
+        localStorage.setItem('viewMode', 'list');
+    });
+
+    // 恢复视图模式
+    const savedViewMode = localStorage.getItem('viewMode');
+    if (savedViewMode === 'list') {
+        listViewBtn?.click();
+    }
+
+    // 排序功能
     const sortBy = document.getElementById('sort-by');
     const sortOrder = document.getElementById('sort-order');
     const sortForm = document.getElementById('sort-form');
 
     const handleSortChange = () => {
-        sortForm.submit();
+        showLoading();
+        setTimeout(() => {
+            sortForm.submit();
+        }, 300);
     };
 
-    sortBy.addEventListener('change', handleSortChange);
-    sortOrder.addEventListener('change', handleSortChange);
+    sortBy?.addEventListener('change', handleSortChange);
+    sortOrder?.addEventListener('change', handleSortChange);
 
-    // --- Global Audio Player ---
+    // 表单提交动画
+    document.getElementById('normal-search-form')?.addEventListener('submit', () => {
+        showLoading();
+    });
+
+    // 全局音频播放器
     let audioContext = null;
     let currentAudioSource = null;
     let globalPlayingButton = null;
@@ -428,8 +1299,8 @@ document.addEventListener('DOMContentLoaded', () => {
             globalPlayingButton = null;
         }
     };
-    
-    // --- AI Book Details Chat Logic ---
+
+    // AI详情模态框
     const setupDetailsModal = () => {
         const modal = document.getElementById('ai-details-modal');
         if (!modal) return;
@@ -442,15 +1313,15 @@ document.addEventListener('DOMContentLoaded', () => {
         let isAIResponding = false;
 
         const renderMessage = (role, content) => {
-            const msgWrapper = document.createElement('div');
-            msgWrapper.className = `w-full flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
-            const msgDiv = document.createElement('div');
-            msgDiv.className = `p-3 rounded-lg max-w-lg break-words ${role === 'user' ? 'bg-sky-100 dark:bg-sky-900 text-gray-900 dark:text-gray-100' : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`;
-            msgDiv.innerHTML = content.replace(/\n/g, '<br>');
-            msgWrapper.appendChild(msgDiv);
-            chatLog.appendChild(msgWrapper);
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+            messageDiv.appendChild(contentDiv);
+            chatLog.appendChild(messageDiv);
             chatLog.scrollTop = chatLog.scrollHeight;
-            return msgDiv;
+            return contentDiv;
         };
 
         const toggleInput = (disabled) => {
@@ -518,7 +1389,6 @@ document.addEventListener('DOMContentLoaded', () => {
         sendBtn.addEventListener('click', handleSend);
         userInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleSend());
         
-        // 统一的AI按钮点击处理 - 支持移动端和桌面端
         document.body.addEventListener('click', (e) => {
             const btn = e.target.closest('.ask-ai-details-btn');
             if (btn) {
@@ -547,7 +1417,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 模态框外部点击关闭
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 closeBtn.click();
@@ -555,12 +1424,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    // --- AI Search Chat Logic ---
+    // AI搜索模态框
     const setupSearchModal = () => {
         const modal = document.getElementById('ai-search-modal');
         if (!modal) return;
 
         const openBtn = document.getElementById('ai-search-open-btn');
+        const aiSearchTrigger = document.getElementById('ai-search-trigger');
         const closeBtn = modal.querySelector('.close-modal-btn');
         const chatLog = modal.querySelector('.chat-log');
         const userInput = modal.querySelector('.user-input');
@@ -569,15 +1439,15 @@ document.addEventListener('DOMContentLoaded', () => {
         let isAIResponding = false;
         
         const renderMessage = (role, content) => {
-            const msgWrapper = document.createElement('div');
-            msgWrapper.className = `w-full flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
-            const msgDiv = document.createElement('div');
-            msgDiv.className = `p-3 rounded-lg max-w-lg break-words ${role === 'user' ? 'bg-sky-100 dark:bg-sky-900 text-gray-900 dark:text-gray-100' : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`;
-            msgDiv.innerHTML = content.replace(/\n/g, '<br>');
-            msgWrapper.appendChild(msgDiv);
-            chatLog.appendChild(msgWrapper);
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerHTML = content.replace(/\n/g, '<br>');
+            messageDiv.appendChild(contentDiv);
+            chatLog.appendChild(messageDiv);
             chatLog.scrollTop = chatLog.scrollHeight;
-            return msgDiv;
+            return contentDiv;
         };
 
         const toggleInput = (disabled, message = '') => {
@@ -596,7 +1466,6 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleInput(true, 'AI正在处理您的请求...');
             recommendationsContainer.innerHTML = '';
             
-            // Step 1: Expand Query
             let expandedQuery = '';
             try {
                 const expandRes = await fetch('/ai-expand-query', { 
@@ -614,7 +1483,6 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const finalQueryForRec = expandedQuery || userQuery;
             
-            // Step 2: Get dialogue response
             const aiMessageDiv = renderMessage('assistant', '▍');
             let fullResponse = '';
             try {
@@ -684,20 +1552,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
-        sendBtn.addEventListener('click', handleSend);
-        userInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleSend());
-        
-        openBtn.addEventListener('click', () => {
+        const openModal = () => {
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-            chatLog.innerHTML = `<div class="w-full flex justify-start"><div class="p-3 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">你好！请用自然语言描述你想找什么样的书。</div></div>`;
+            chatLog.innerHTML = '<div class="initial-message"><div class="message assistant"><div class="message-content">你好！请用自然语言描述你想找什么样的书。</div></div></div>';
             recommendationsContainer.innerHTML = '';
-            const query = document.getElementById('main-search-input').value.trim();
+            const query = searchInput.value.trim();
             if (query) {
                 userInput.value = query;
                 handleSend();
             }
-        });
+        };
+
+        sendBtn.addEventListener('click', handleSend);
+        userInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleSend());
+        
+        openBtn.addEventListener('click', openModal);
+        aiSearchTrigger?.addEventListener('click', openModal);
         
         closeBtn.addEventListener('click', () => {
             modal.classList.add('hidden');
@@ -709,7 +1580,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // 模态框外部点击关闭
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 closeBtn.click();
@@ -717,11 +1587,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
     
-    // --- Initialize both modals ---
     setupDetailsModal();
     setupSearchModal();
     
-    // --- Event Delegation for Recommendation Buttons ---
+    // 推荐按钮事件委托
     const recommendationsContainer = document.getElementById('ai-recommendations');
     if(recommendationsContainer) {
         recommendationsContainer.addEventListener('click', async (e) => {
@@ -738,7 +1607,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (result.success) {
                     button.className = 'bg-gray-400 text-white px-3 py-1 text-xs fluent-btn cursor-not-allowed';
                     button.innerText = '已借阅';
-                    // 延迟刷新页面以显示成功状态
                     setTimeout(() => window.location.reload(), 1500); 
                 } else {
                     button.innerText = '失败';
@@ -754,33 +1622,42 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- 移动端优化：防止意外触发 ---
-    if (window.innerWidth <= 768) {
-        // 移动端滚动时不触发hover效果
-        let isScrolling = false;
-        let scrollTimeout;
-        
-        document.addEventListener('scroll', () => {
-            isScrolling = true;
-            clearTimeout(scrollTimeout);
-            scrollTimeout = setTimeout(() => {
-                isScrolling = false;
-            }, 150);
-        });
-
-        // 为移动端AI按钮添加触觉反馈
-        document.querySelectorAll('.ask-ai-details-btn').forEach(btn => {
-            btn.addEventListener('touchstart', () => {
-                if (navigator.vibrate) {
-                    navigator.vibrate(50); // 轻微震动反馈
+    // 卡片懒加载
+    const observeCards = () => {
+        const cards = document.querySelectorAll('.book-card');
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.animationDelay = Math.random() * 0.5 + 's';
+                    entry.target.style.animation = 'fadeInUp 0.6s ease forwards';
+                    observer.unobserve(entry.target);
                 }
             });
-        });
-    }
+        }, { threshold: 0.1 });
 
-    // --- 键盘导航支持 ---
+        cards.forEach(card => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+            observer.observe(card);
+        });
+    };
+
+    // 添加CSS动画
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fadeInUp {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+    `;
+    document.head.appendChild(style);
+
+    observeCards();
+
+    // 键盘导航支持
     document.addEventListener('keydown', (e) => {
-        // ESC 键关闭模态框
         if (e.key === 'Escape') {
             const activeModal = document.querySelector('.fixed:not(.hidden)');
             if (activeModal) {
@@ -789,246 +1666,21 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // 页面可见性变化处理
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && currentAudioSource) {
+            currentAudioSource.stop();
+            currentAudioSource = null;
+            if (globalPlayingButton) {
+                globalPlayingButton.innerHTML = '朗读';
+                globalPlayingButton = null;
+            }
+        }
+    });
+
+    // 初始化完成，隐藏加载动画
+    hideLoading();
 });
 </script>
-
-<style>
-/* 额外的移动端优化样式 */
-@media (max-width: 640px) {
-    /* 移动端模态框全屏显示 */
-    .modal-mobile {
-        height: 95vh !important;
-        margin: 2.5vh 0.5rem;
-        max-width: none;
-    }
-    
-    /* 移动端AI按钮优化 - 更好的视觉效果和触摸体验 */
-    .ask-ai-details-btn {
-        min-width: 36px;
-        min-height: 36px;
-        touch-action: manipulation;
-        background: rgba(14, 165, 233, 0.05);
-        border: 1px solid rgba(14, 165, 233, 0.2);
-    }
-    
-    /* 夜间模式下的AI按钮 */
-    .dark .ask-ai-details-btn {
-        background: rgba(56, 189, 248, 0.1);
-        border: 1px solid rgba(56, 189, 248, 0.3);
-    }
-    
-    .ask-ai-details-btn:hover {
-        background: rgba(14, 165, 233, 0.1);
-        border-color: rgba(14, 165, 233, 0.3);
-        transform: scale(1.02);
-    }
-    
-    /* 夜间模式悬停效果 */
-    .dark .ask-ai-details-btn:hover {
-        background: rgba(56, 189, 248, 0.2);
-        border-color: rgba(56, 189, 248, 0.4);
-    }
-    
-    .ask-ai-details-btn:active {
-        transform: scale(0.98);
-        background: rgba(14, 165, 233, 0.15);
-    }
-    
-    .dark .ask-ai-details-btn:active {
-        background: rgba(56, 189, 248, 0.25);
-    }
-    
-    /* 移动端书籍信息第二行优化 */
-    .text-xs.space-x-3 span {
-        background: rgba(107, 114, 128, 0.1);
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-weight: 500;
-        color: rgb(107, 114, 128);
-    }
-    
-    /* 夜间模式下的信息标签 */
-    .dark .text-xs.space-x-3 span {
-        background: rgba(156, 163, 175, 0.15);
-        color: rgb(156, 163, 175);
-    }
-    
-    /* 防止双击缩放 */
-    .ask-ai-details-btn, .fluent-btn {
-        touch-action: manipulation;
-        -webkit-touch-callout: none;
-        -webkit-user-select: none;
-        user-select: none;
-    }
-    
-    /* 移动端表格优化 */
-    .table-mobile td {
-        vertical-align: top;
-    }
-    
-    /* 移动端按钮尺寸优化 */
-    .fluent-btn {
-        min-height: 40px;
-        padding: 8px 16px;
-    }
-    
-    /* 改善移动端间距 */
-    .px-3 {
-        padding-left: 1rem;
-        padding-right: 1rem;
-    }
-    
-    /* 移动端操作按钮图标优化 */
-    .fluent-btn svg {
-        stroke-width: 2.5;
-    }
-}
-
-/* 夜间模式全局优化 */
-@media (prefers-color-scheme: dark) {
-    /* 改善深色模式下的卡片对比度 */
-    .fluent-card {
-        background: rgba(31, 41, 55, 0.9);
-        border: 1px solid rgba(75, 85, 99, 0.3);
-    }
-    
-    /* 深色模式下的表格行 */
-    .bg-white\/50 {
-        background: rgba(31, 41, 55, 0.5) !important;
-    }
-    
-    /* 深色模式下的表头 */
-    .bg-gray-50\/50 {
-        background: rgba(17, 24, 39, 0.7) !important;
-    }
-    
-    /* 深色模式下的悬停效果 */
-    .hover\:bg-gray-50\/70:hover {
-        background: rgba(55, 65, 81, 0.7) !important;
-    }
-    
-    /* 深色模式下的状态标签 */
-    .bg-green-100 {
-        background: rgba(6, 78, 59, 0.8) !important;
-    }
-    
-    .bg-yellow-100 {
-        background: rgba(92, 77, 19, 0.8) !important;
-    }
-    
-    /* 深色模式下的分割线 */
-    .divide-gray-200 > * + * {
-        border-color: rgb(55, 65, 81) !important;
-    }
-}
-
-/* 强制深色模式类优化 */
-.dark {
-    /* 改善文字对比度 */
-    color: rgb(243, 244, 246);
-}
-
-.dark .fluent-card {
-    background: rgba(31, 41, 55, 0.95);
-    border: 1px solid rgba(75, 85, 99, 0.4);
-    backdrop-filter: blur(20px) saturate(180%);
-}
-
-.dark .bg-white\/50 {
-    background: rgba(31, 41, 55, 0.6) !important;
-}
-
-.dark .bg-gray-50\/50 {
-    background: rgba(17, 24, 39, 0.8) !important;
-}
-
-.dark .hover\:bg-gray-50\/70:hover {
-    background: rgba(55, 65, 81, 0.8) !important;
-}
-
-/* 深色模式下的搜索建议框 */
-.dark #search-suggestions {
-    background: rgb(55, 65, 81);
-    border-color: rgb(75, 85, 99);
-}
-
-.dark .suggestion-item:hover {
-    background: rgb(75, 85, 99) !important;
-}
-
-/* 深色模式下的模态框 */
-.dark .modal-mobile {
-    background: rgba(31, 41, 55, 0.98);
-    border: 1px solid rgba(75, 85, 99, 0.5);
-}
-
-/* 深色模式下的聊天区域 */
-.dark .chat-log {
-    background: rgba(17, 24, 39, 0.9) !important;
-}
-
-/* 深色模式下的状态标签增强 */
-.dark .bg-green-100 {
-    background: rgba(6, 78, 59, 0.9) !important;
-    color: rgb(167, 243, 208) !important;
-}
-
-.dark .text-green-800 {
-    color: rgb(167, 243, 208) !important;
-}
-
-.dark .bg-yellow-100 {
-    background: rgba(92, 77, 19, 0.9) !important;
-    color: rgb(254, 240, 138) !important;
-}
-
-.dark .text-yellow-800 {
-    color: rgb(254, 240, 138) !important;
-}
-
-/* 高对比度模式适配 */
-@media (prefers-contrast: high) {
-    .ask-ai-details-btn {
-        border: 1px solid currentColor;
-    }
-}
-
-/* 深色模式下的AI按钮优化 */
-@media (prefers-color-scheme: dark) {
-    .ask-ai-details-btn:hover {
-        background-color: rgba(14, 165, 233, 0.2);
-    }
-}
-
-/* 无障碍访问增强 */
-.ask-ai-details-btn:focus {
-    outline: 2px solid #3b82f6;
-    outline-offset: 2px;
-}
-
-/* 加载状态指示器 */
-.ask-ai-details-btn.loading {
-    opacity: 0.6;
-    pointer-events: none;
-}
-
-.ask-ai-details-btn.loading::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 12px;
-    height: 12px;
-    margin: -6px 0 0 -6px;
-    border: 2px solid transparent;
-    border-top: 2px solid currentColor;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-</style>
 {% endblock %}
