@@ -72,7 +72,7 @@ class Book(db.Model):
     title = db.Column(db.String(200), nullable=False, index=True)
     publisher = db.Column(db.String(200), nullable=True)
     bookshelf_number = db.Column(db.String(50), nullable=True, index=True)
-    isbn = db.Column(db.String(20), unique=True, nullable=False)
+    isbn = db.Column(db.String(20), nullable=False, index=True)  # 移除unique约束
     book_code = db.Column(db.String(50), unique=True, nullable=False, index=True)
     stock = db.Column(db.Integer, default=1)
     quantity_available = db.Column(db.Integer, default=1)
@@ -118,7 +118,7 @@ def limit_api_usage(api_name, limit=15):
             today = date.today()
             usage = current_user.api_usages.filter_by(api_name=api_name, usage_date=today).first()
             if usage and usage.count >= limit:
-                return jsonify({'error': f'您今日的“{api_name}”服务调用次数已达上限。'}), 429
+                return jsonify({'error': f'您今日的"{api_name}"服务调用次数已达上限。'}), 429
             if not usage:
                 usage = ApiUsage(user_id=current_user.id, api_name=api_name, usage_date=today, count=1)
                 db.session.add(usage)
@@ -143,6 +143,47 @@ def get_baidu_token():
         baidu_token_cache['expires_at'] = now + data.get("expires_in", 3600) - 60
         return baidu_token_cache['token']
     return None
+
+# --- 搜索建议API ---
+@app.route('/search-suggestions')
+@login_required
+def search_suggestions():
+    query = request.args.get('q', '').strip()
+    if not query or len(query) < 1:
+        return jsonify([])
+    
+    # 搜索书名和编码
+    books = Book.query.filter(
+        or_(
+            Book.title.ilike(f"%{query}%"),
+            Book.book_code.ilike(f"%{query}%"),
+            Book.publisher.ilike(f"%{query}%")
+        )
+    ).limit(10).all()
+    
+    suggestions = []
+    seen = set()
+    
+    for book in books:
+        # 书名建议
+        if book.title not in seen:
+            suggestions.append({
+                'text': book.title,
+                'type': 'title',
+                'icon': 'book'
+            })
+            seen.add(book.title)
+        
+        # 编码建议
+        if book.book_code not in seen:
+            suggestions.append({
+                'text': book.book_code,
+                'type': 'code',
+                'icon': 'code'
+            })
+            seen.add(book.book_code)
+    
+    return jsonify(suggestions[:8])
 
 # --- 所有路由 ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -172,13 +213,23 @@ def index():
     search_query = request.args.get('search_query', '')
     sort_by = request.args.get('sort_by', 'id')
     sort_order = request.args.get('sort_order', 'desc')
+    
     query = Book.query
-    if search_query: query = query.filter(or_(Book.title.ilike(f"%{search_query}%"), Book.book_code == search_query))
+    if search_query: 
+        query = query.filter(or_(
+            Book.title.ilike(f"%{search_query}%"), 
+            Book.book_code.ilike(f"%{search_query}%"),
+            Book.publisher.ilike(f"%{search_query}%"),
+            Book.bookshelf_number.ilike(f"%{search_query}%")
+        ))
+    
+    # 排序逻辑
     sort_column = getattr(Book, sort_by, Book.id)
     if sort_order == 'desc':
         query = query.order_by(desc(sort_column))
     else:
         query = query.order_by(asc(sort_column))
+    
     books_pagination = query.paginate(page=page, per_page=10, error_out=False)
     return render_template('index.html', books_pagination=books_pagination, search_query=search_query, sort_by=sort_by, sort_order=sort_order)
 
@@ -311,12 +362,12 @@ def ai_search():
     top_n_indices = np.argsort(similarities)[-5:][::-1]
     retrieved_context = [f"- 书名:《{book['title']}》, 作者:{book['publisher']}, ISBN:{book['isbn']}, 状态:{'可用' if book['quantity_available'] > 0 else '已借出'}, 图书编码:{book['book_code']}" for index in top_n_indices if similarities[index] > 0.01 and (book := book_corpus_data[index])]
     context_str = "\n".join(retrieved_context) if retrieved_context else "未在书库中找到直接相关的书籍。"
-    system_prompt = f"""你是一个专业的图书查询助手。请严格根据下面提供的“相关书籍资料”来回答用户的问题。
+    system_prompt = f"""你是一个专业的图书查询助手。请严格根据下面提供的"相关书籍资料"来回答用户的问题。
 相关书籍资料:
 ---
 {context_str}
 ---
-请根据以上资料，回答用户的问题：“{user_query}”。如果资料中有合适的书籍，请推荐给用户并简要说明理由。如果资料显示未找到相关书籍，请如实告知用户。请保持回答简洁。"""
+请根据以上资料，回答用户的问题："{user_query}"。如果资料中有合适的书籍，请推荐给用户并简要说明理由。如果资料显示未找到相关书籍，请如实告知用户。请保持回答简洁。"""
     messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_query}]
     def generate():
         try:
@@ -338,8 +389,8 @@ def ai_expand_query():
     system_prompt = """你是一个专为图书馆检索系统服务的、高效的语义解析引擎。你的唯一任务是将用户的自然语言查询，严格地转换为一个结构化的JSON对象，以便后续的关键词匹配。严格遵守以下处理规则：
 1. 核心实体识别: 识别查询中的核心概念，如人物、事件、主题、作品等。
 2. 同义词/近义词扩展: 为核心实体提供2-3个最相关的同义或近义词。
-3. 时间范围解析: 如果查询中包含时期描述（如“维多利亚时期”、“明末清初”），将其解析为一个大致的年份范围（如 "1837-1901"）。
-4. 生成上位/下位概念: 为核心主题生成1个更宽泛的父概念（如“英国文学”）和1-2个更具体的子概念（如“工业小说”）。
+3. 时间范围解析: 如果查询中包含时期描述（如"维多利亚时期"、"明末清初"），将其解析为一个大致的年份范围（如 "1837-1901"）。
+4. 生成上位/下位概念: 为核心主题生成1个更宽泛的父概念（如"英国文学"）和1-2个更具体的子概念（如"工业小说"）。
 5. 补充学术关键词: 基于查询意图，补充3-5个最可能相关的学术关键词（比如：相关作家、学者、作品、理论、术语和学术关键词）。
 输出格式: 必须严格返回一个JSON对象。"""
     try:
@@ -404,6 +455,7 @@ def text_to_speech():
         return Response(response.content, mimetype='audio/mp3')
     else:
         return jsonify(response.json()), response.status_code
+
 # --- 管理员路由 ---
 @app.route('/admin/dashboard')
 @login_required
@@ -463,13 +515,33 @@ def import_books():
             if not required_columns.issubset(df.columns):
                 flash(f'Excel文件必须包含以下列: {", ".join(required_columns)}', 'danger')
                 return redirect(url_for('admin_dashboard'))
+            
+            added_count = 0
+            skipped_count = 0
+            
             for _, row in df.iterrows():
                 book_code, isbn, stock = str(row['编码']), str(row['ISBN']), int(row['库存量'])
-                existing_book = Book.query.filter(or_(Book.book_code == book_code, Book.isbn == isbn)).first()
+                
+                # 修复：只检查book_code是否重复，允许相同ISBN的不同编码
+                existing_book = Book.query.filter_by(book_code=book_code).first()
+                
                 if not existing_book:
-                    db.session.add(Book(title=row['书名'], publisher=row['出版社'], isbn=isbn, book_code=book_code, stock=stock, quantity_available=stock, bookshelf_number=row.get('书柜号')))
+                    db.session.add(Book(
+                        title=row['书名'], 
+                        publisher=row['出版社'], 
+                        isbn=isbn, 
+                        book_code=book_code, 
+                        stock=stock, 
+                        quantity_available=stock, 
+                        bookshelf_number=row.get('书柜号')
+                    ))
+                    added_count += 1
+                else:
+                    skipped_count += 1
+                    print(f"跳过重复编码: {book_code}")
+            
             db.session.commit()
-            flash('数据导入成功！', 'success')
+            flash(f'数据导入完成！新增 {added_count} 本书，跳过 {skipped_count} 本重复编码的书。', 'success')
             update_ai_catalog_on_startup()
             flash('AI检索引擎已同步更新。', 'success')
         except Exception as e:
@@ -497,8 +569,8 @@ def admin_return_book():
 def admin_add_book():
     if current_user.role != 'admin': abort(403)
     data = request.form
-    if Book.query.filter(or_(Book.book_code == data['book_code'], Book.isbn == data['isbn'])).first():
-        flash('图书编码或ISBN已存在。', 'danger')
+    if Book.query.filter_by(book_code=data['book_code']).first():
+        flash('图书编码已存在。', 'danger')
     else:
         new_book = Book(title=data['title'], publisher=data['publisher'], isbn=data['isbn'], book_code=data['book_code'], stock=int(data['stock']), quantity_available=int(data['stock']), bookshelf_number=data.get('bookshelf_number'))
         db.session.add(new_book)
@@ -648,4 +720,3 @@ if __name__ == '__main__':
         print("请确保您已在项目根目录创建了 .env 文件，并包含所有必需的API Keys。\n")
     else:
         app.run(debug=True, threaded=True)
-

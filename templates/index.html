@@ -5,10 +5,18 @@
 
 {% block content %}
 <div class="fluent-card mb-6">
-    <h2 class="text-xl font-semibold text-gray-800 mb-4">图书查询</h2>
+    <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">图书查询</h2>
     <div class="flex flex-col sm:flex-row gap-4">
         <form id="normal-search-form" method="GET" action="{{ url_for('index') }}" class="flex-grow flex gap-4">
-            <input type="text" id="main-search-input" name="search_query" value="{{ search_query }}" placeholder="输入书名、编码进行搜索，或描述你想要的书..." class="flex-grow w-full px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-primary/50">
+            <div class="relative flex-grow" id="search-container">
+                <input type="text" 
+                       id="main-search-input" 
+                       name="search_query" 
+                       value="{{ search_query }}" 
+                       placeholder="输入书名、编码进行搜索，或描述你想要的书..." 
+                       class="w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-theme-primary/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400"
+                       autocomplete="off">
+            </div>
             <button type="submit" class="bg-theme-primary text-white px-6 py-2 hover:bg-theme-primary-dark fluent-btn">搜索</button>
         </form>
         <button id="ai-search-open-btn" class="bg-sky-500 text-white px-6 py-2 hover:bg-sky-600 fluent-btn flex items-center justify-center gap-2">
@@ -18,77 +26,308 @@
     </div>
 </div>
 
+<!-- 搜索建议框 - 放在body级别以避免层叠问题 -->
+<div id="search-suggestions" class="fixed bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto hidden" style="z-index: 9999;">
+    <!-- 动态填充搜索建议 -->
+</div>
+
 <div class="fluent-card">
-    <h2 class="text-xl font-semibold text-gray-800 mb-4">查询结果</h2>
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+        <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">查询结果</h2>
+        
+        <!-- 排序控件 -->
+        <div class="flex items-center gap-2 text-sm">
+            <label class="text-gray-600 dark:text-gray-400">排序：</label>
+            <form method="GET" id="sort-form" class="flex items-center gap-2">
+                <input type="hidden" name="search_query" value="{{ search_query }}">
+                <select name="sort_by" id="sort-by" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-theme-primary/50 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                    <option value="id" {% if sort_by == 'id' %}selected{% endif %}>录入顺序</option>
+                    <option value="title" {% if sort_by == 'title' %}selected{% endif %}>书名</option>
+                    <option value="bookshelf_number" {% if sort_by == 'bookshelf_number' %}selected{% endif %}>书柜号</option>
+                    <option value="quantity_available" {% if sort_by == 'quantity_available' %}selected{% endif %}>可借数量</option>
+                </select>
+                <select name="sort_order" id="sort-order" class="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-theme-primary/50 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">
+                    <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>降序</option>
+                    <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>升序</option>
+                </select>
+            </form>
+        </div>
+    </div>
+    
     <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50/50">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+            <thead class="bg-gray-50/50 dark:bg-gray-800/50">
                 <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">书名</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">书柜号</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">图书编码</th>
-                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">库存状态</th>
-                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">操作</th>
-                    <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">AI问答</th>
+                    <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">书名</th>
+                    <th class="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">书柜号</th>
+                    <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">图书编码</th>
+                    <th class="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">库存状态</th>
+                    <th class="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
+                    <th class="hidden sm:table-cell px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">AI问答</th>
                 </tr>
             </thead>
-            <tbody class="bg-white/50 divide-y divide-gray-200">
+            <tbody class="bg-white/50 dark:bg-gray-800/50 divide-y divide-gray-200 dark:divide-gray-600">
                 {% for book in books_pagination.items %}
-                <tr>
-                    <td class="px-6 py-4">{{ book.title }}</td>
-                    <td class="px-6 py-4">{{ book.bookshelf_number }}</td>
-                    <td class="px-6 py-4">{{ book.book_code }}</td>
-                    <td class="px-6 py-4 text-center">
-                        {% if book.quantity_available > 0 %}<span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">可借阅 ({{ book.quantity_available }}/{{ book.stock }})</span>
-                        {% else %}<span class="px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">已借完 (0/{{ book.stock }})</span>{% endif %}
+                <tr class="hover:bg-gray-50/70 dark:hover:bg-gray-700/70 transition-colors">
+                    <td class="px-3 sm:px-6 py-4">
+                        <div class="font-medium text-gray-900 dark:text-gray-100">{{ book.title }}</div>
+                        <div class="sm:hidden text-xs text-gray-500 dark:text-gray-400 mt-1">{{ book.bookshelf_number }}</div>
                     </td>
-                    <td class="px-6 py-4 text-center space-x-2">
+                    <td class="hidden sm:table-cell px-6 py-4 text-gray-500 dark:text-gray-400">{{ book.bookshelf_number }}</td>
+                    <td class="px-3 sm:px-6 py-4 text-gray-500 dark:text-gray-400">{{ book.book_code }}</td>
+                    <td class="px-3 sm:px-6 py-4 text-center">
                         {% if book.quantity_available > 0 %}
-                            {% if not current_user.records | selectattr('book_id', 'equalto', book.id) | selectattr('status', 'equalto', 'borrowed') | list %}
-                            <form method="POST" action="{{ url_for('borrow_book', book_id=book.id) }}" class="inline"><button type="submit" class="text-white bg-theme-primary hover:bg-theme-primary-dark px-3 py-1 fluent-btn">借阅</button></form>
-                            {% else %}
-                            <span class="text-gray-400 cursor-not-allowed">已借阅</span>
-                            {% endif %}
+                            <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                可借 ({{ book.quantity_available }}/{{ book.stock }})
+                            </span>
                         {% else %}
-                            {% if not current_user.has_wanted(book) %}<form method="POST" action="{{ url_for('want_book', book_id=book.id) }}" class="inline"><button type="submit" class="text-white bg-sky-500 hover:bg-sky-600 px-3 py-1 fluent-btn">想要</button></form>
-                            {% else %}<span class="text-gray-400 cursor-not-allowed">已想要</span>{% endif %}
+                            <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200">
+                                已借完
+                            </span>
                         {% endif %}
                     </td>
-                    <td class="px-6 py-4 text-center">
+                    <td class="px-3 sm:px-6 py-4 text-center">
+                        <div class="flex flex-col sm:flex-row gap-1 sm:gap-2 justify-center">
+                            {% if book.quantity_available > 0 %}
+                                {% if not current_user.records | selectattr('book_id', 'equalto', book.id) | selectattr('status', 'equalto', 'borrowed') | list %}
+                                <form method="POST" action="{{ url_for('borrow_book', book_id=book.id) }}" class="inline">
+                                    <button type="submit" class="text-white bg-theme-primary hover:bg-theme-primary-dark px-2 sm:px-3 py-1 fluent-btn text-xs sm:text-sm">借阅</button>
+                                </form>
+                                {% else %}
+                                <span class="text-gray-400 dark:text-gray-500 text-xs sm:text-sm">已借阅</span>
+                                {% endif %}
+                            {% else %}
+                                {% if not current_user.has_wanted(book) %}
+                                <form method="POST" action="{{ url_for('want_book', book_id=book.id) }}" class="inline">
+                                    <button type="submit" class="text-white bg-sky-500 hover:bg-sky-600 px-2 sm:px-3 py-1 fluent-btn text-xs sm:text-sm">想要</button>
+                                </form>
+                                {% else %}
+                                <span class="text-gray-400 dark:text-gray-500 text-xs sm:text-sm">已想要</span>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td class="hidden sm:table-cell px-6 py-4 text-center">
                          <button class="ask-ai-details-btn" data-book-title="{{ book.title }}" data-book-isbn="{{ book.isbn }}" title="询问AI获取书籍梗概">
-                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-sky-500 hover:text-sky-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-sky-500 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                          </button>
                     </td>
                 </tr>
-                {% else %}<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">没有找到匹配的图书。</td></tr>{% endfor %}
+                {% else %}
+                <tr>
+                    <td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <div class="flex flex-col items-center">
+                            <svg class="h-12 w-12 text-gray-300 dark:text-gray-600 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <p>没有找到匹配的图书</p>
+                            <p class="text-sm text-gray-400 dark:text-gray-500 mt-1">尝试使用不同的关键词或使用AI搜书功能</p>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
             </tbody>
         </table>
     </div>
-    {% if books_pagination.pages > 1 %}{{ render_pagination(books_pagination, 'index', query_params={'search_query': search_query}) }}{% endif %}
+    {% if books_pagination.pages > 1 %}{{ render_pagination(books_pagination, 'index', query_params={'search_query': search_query, 'sort_by': sort_by, 'sort_order': sort_order}) }}{% endif %}
 </div>
 
-
 <!-- AI Book Details Modal -->
-<div id="ai-details-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden items-center justify-center p-4">
+<div id="ai-details-modal" class="fixed inset-0 bg-black bg-opacity-60 dark:bg-black dark:bg-opacity-80 z-50 hidden items-center justify-center p-4">
     <div class="fluent-card w-full max-w-2xl mx-auto flex flex-col" style="height: 80vh;">
-        <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold"><span class="text-sky-500">AI</span> 图书管理员</h2><button class="close-modal-btn text-2xl">&times;</button></div>
-        <div class="chat-log flex-grow space-y-4 overflow-y-auto p-4 bg-gray-50/80 rounded-lg"></div>
-        <div class="mt-4 pt-4 border-t flex gap-2"><input type="text" class="user-input flex-grow w-full px-4 py-2 bg-white border border-gray-300 rounded-lg" placeholder="可以继续提问..." disabled><button class="send-btn bg-sky-500 text-white px-4 py-2 fluent-btn" disabled>发送</button></div>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200"><span class="text-sky-500 dark:text-sky-400">AI</span> 图书管理员</h2>
+            <button class="close-modal-btn text-2xl hover:text-gray-600 dark:hover:text-gray-400 text-gray-500 dark:text-gray-400">&times;</button>
+        </div>
+        <div class="chat-log flex-grow space-y-4 overflow-y-auto p-4 bg-gray-50/80 dark:bg-gray-800/80 rounded-lg"></div>
+        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 flex gap-2">
+            <input type="text" class="user-input flex-grow w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400" placeholder="可以继续提问..." disabled>
+            <button class="send-btn bg-sky-500 text-white px-4 py-2 fluent-btn" disabled>发送</button>
+        </div>
     </div>
 </div>
 
 <!-- AI Search Modal -->
-<div id="ai-search-modal" class="fixed inset-0 bg-black bg-opacity-60 z-50 hidden items-center justify-center p-4">
+<div id="ai-search-modal" class="fixed inset-0 bg-black bg-opacity-60 dark:bg-black dark:bg-opacity-80 z-50 hidden items-center justify-center p-4">
     <div class="fluent-card w-full max-w-2xl mx-auto flex flex-col" style="height: 80vh;">
-        <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold">AI 智能搜书</h2><button class="close-modal-btn text-2xl">&times;</button></div>
-        <div class="chat-log flex-grow space-y-4 overflow-y-auto p-4 bg-gray-50/80 rounded-lg"><div class="w-full flex justify-start"><div class="p-3 rounded-lg bg-white">你好！请用自然语言描述你想找什么样的书。</div></div></div>
-        <div id="ai-recommendations" class="mt-2 p-2 border-t border-gray-200"></div>
-        <div class="mt-4 pt-4 border-t flex gap-2"><input type="text" class="user-input flex-grow w-full px-4 py-2 bg-white border border-gray-300 rounded-lg" placeholder="请描述您想找的书..."><button class="send-btn bg-sky-500 text-white px-4 py-2 fluent-btn">发送</button></div>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">AI 智能搜书</h2>
+            <button class="close-modal-btn text-2xl hover:text-gray-600 dark:hover:text-gray-400 text-gray-500 dark:text-gray-400">&times;</button>
+        </div>
+        <div class="chat-log flex-grow space-y-4 overflow-y-auto p-4 bg-gray-50/80 dark:bg-gray-800/80 rounded-lg">
+            <div class="w-full flex justify-start">
+                <div class="p-3 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">你好！请用自然语言描述你想找什么样的书。</div>
+            </div>
+        </div>
+        <div id="ai-recommendations" class="mt-2 p-2 border-t border-gray-200 dark:border-gray-600"></div>
+        <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 flex gap-2">
+            <input type="text" class="user-input flex-grow w-full px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500/50 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400" placeholder="请描述您想找的书...">
+            <button class="send-btn bg-sky-500 text-white px-4 py-2 fluent-btn">发送</button>
+        </div>
     </div>
 </div>
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    
+    // --- 搜索建议功能 ---
+    const searchInput = document.getElementById('main-search-input');
+    const suggestionsBox = document.getElementById('search-suggestions');
+    const searchContainer = document.getElementById('search-container');
+    let searchTimeout;
+    let currentSuggestions = [];
+    let selectedIndex = -1;
+
+    const fetchSuggestions = async (query) => {
+        if (query.length < 1) {
+            hideSuggestions();
+            return;
+        }
+
+        try {
+            const response = await fetch(`/search-suggestions?q=${encodeURIComponent(query)}`);
+            const suggestions = await response.json();
+            currentSuggestions = suggestions;
+            displaySuggestions(suggestions);
+        } catch (error) {
+            console.error('获取搜索建议失败:', error);
+            hideSuggestions();
+        }
+    };
+
+    const displaySuggestions = (suggestions) => {
+        if (suggestions.length === 0) {
+            hideSuggestions();
+            return;
+        }
+
+        // 计算搜索框的位置
+        const inputRect = searchInput.getBoundingClientRect();
+        const containerRect = searchContainer.getBoundingClientRect();
+        
+        suggestionsBox.style.left = containerRect.left + 'px';
+        suggestionsBox.style.top = (inputRect.bottom + 2) + 'px';
+        suggestionsBox.style.width = containerRect.width + 'px';
+
+        const html = suggestions.map((suggestion, index) => {
+            const iconClass = suggestion.type === 'title' ? 'fa-book' : 'fa-barcode';
+            return `
+                <div class="suggestion-item px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer flex items-center gap-2 ${index === selectedIndex ? 'bg-blue-50 dark:bg-blue-900' : ''}" 
+                     data-text="${suggestion.text}" data-index="${index}">
+                    <i class="fas ${iconClass} text-gray-400 dark:text-gray-500 text-sm"></i>
+                    <span class="flex-grow text-sm text-gray-900 dark:text-gray-100">${suggestion.text}</span>
+                    <span class="text-xs text-gray-400 dark:text-gray-500">${suggestion.type === 'title' ? '书名' : '编码'}</span>
+                </div>
+            `;
+        }).join('');
+        
+        suggestionsBox.innerHTML = html;
+        suggestionsBox.classList.remove('hidden');
+        
+        // 绑定点击事件
+        suggestionsBox.querySelectorAll('.suggestion-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const text = item.dataset.text;
+                searchInput.value = text;
+                hideSuggestions();
+                searchInput.focus();
+            });
+        });
+    };
+
+    const hideSuggestions = () => {
+        suggestionsBox.classList.add('hidden');
+        selectedIndex = -1;
+    };
+
+    const selectSuggestion = (index) => {
+        selectedIndex = index;
+        suggestionsBox.querySelectorAll('.suggestion-item').forEach((item, i) => {
+            if (i === index) {
+                item.classList.add('bg-blue-50', 'dark:bg-blue-900');
+                item.classList.remove('hover:bg-gray-100', 'dark:hover:bg-gray-600');
+            } else {
+                item.classList.remove('bg-blue-50', 'dark:bg-blue-900');
+                item.classList.add('hover:bg-gray-100', 'dark:hover:bg-gray-600');
+            }
+        });
+    };
+
+    // 搜索输入事件
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        const query = e.target.value.trim();
+        
+        if (query.length < 1) {
+            hideSuggestions();
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => {
+            fetchSuggestions(query);
+        }, 300);
+    });
+
+    // 键盘导航
+    searchInput.addEventListener('keydown', (e) => {
+        const suggestions = suggestionsBox.querySelectorAll('.suggestion-item');
+        
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                if (selectedIndex < currentSuggestions.length - 1) {
+                    selectSuggestion(selectedIndex + 1);
+                }
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                if (selectedIndex > 0) {
+                    selectSuggestion(selectedIndex - 1);
+                }
+                break;
+            case 'Enter':
+                if (selectedIndex >= 0 && currentSuggestions[selectedIndex]) {
+                    e.preventDefault();
+                    searchInput.value = currentSuggestions[selectedIndex].text;
+                    hideSuggestions();
+                }
+                break;
+            case 'Escape':
+                hideSuggestions();
+                break;
+        }
+    });
+
+    // 点击外部隐藏建议
+    document.addEventListener('click', (e) => {
+        if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+            hideSuggestions();
+        }
+    });
+
+    // 窗口大小变化时重新计算位置
+    window.addEventListener('resize', () => {
+        if (!suggestionsBox.classList.contains('hidden')) {
+            const inputRect = searchInput.getBoundingClientRect();
+            const containerRect = searchContainer.getBoundingClientRect();
+            
+            suggestionsBox.style.left = containerRect.left + 'px';
+            suggestionsBox.style.top = (inputRect.bottom + 2) + 'px';
+            suggestionsBox.style.width = containerRect.width + 'px';
+        }
+    });
+
+    // --- 排序功能 ---
+    const sortBy = document.getElementById('sort-by');
+    const sortOrder = document.getElementById('sort-order');
+    const sortForm = document.getElementById('sort-form');
+
+    const handleSortChange = () => {
+        sortForm.submit();
+    };
+
+    sortBy.addEventListener('change', handleSortChange);
+    sortOrder.addEventListener('change', handleSortChange);
 
     // --- Global Audio Player ---
     let audioContext = null;
@@ -115,12 +354,18 @@ document.addEventListener('DOMContentLoaded', () => {
         button.disabled = true;
 
         try {
-            const response = await fetch('/text-to-speech', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) });
+            const response = await fetch('/text-to-speech', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ text }) 
+            });
+            
             if (!response.ok) {
                 const err = await response.json();
                 alert(`语音合成失败: ${err.error || err.err_msg}`);
                 throw new Error('TTS failed');
             }
+            
             if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const audioData = await response.arrayBuffer();
             const source = audioContext.createBufferSource();
@@ -130,6 +375,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentAudioSource = source;
             button.innerHTML = '暂停';
             button.disabled = false;
+            
             source.onended = () => {
                 if (button === globalPlayingButton) {
                      button.innerHTML = '朗读';
@@ -160,7 +406,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const msgWrapper = document.createElement('div');
             msgWrapper.className = `w-full flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
             const msgDiv = document.createElement('div');
-            msgDiv.className = `p-3 rounded-lg max-w-lg break-words ${role === 'user' ? 'bg-sky-100' : 'bg-white'}`;
+            msgDiv.className = `p-3 rounded-lg max-w-lg break-words ${role === 'user' ? 'bg-sky-100 dark:bg-sky-900 text-gray-900 dark:text-gray-100' : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`;
             msgDiv.innerHTML = content.replace(/\n/g, '<br>');
             msgWrapper.appendChild(msgDiv);
             chatLog.appendChild(msgWrapper);
@@ -179,13 +425,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const aiMessageDiv = renderMessage('assistant', '▍');
             let fullResponse = '';
             try {
-                const response = await fetch('/ask-ai', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ history: chatHistory }) });
+                const response = await fetch('/ask-ai', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ history: chatHistory }) 
+                });
+                
                 if (!response.ok) {
                      const err = await response.json();
                      throw new Error(err.error || `Server error: ${response.status}`);
                 }
+                
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder("utf-8");
+                
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) break;
@@ -193,17 +446,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     fullResponse += chunk;
                     aiMessageDiv.innerHTML = fullResponse.replace(/\n/g, '<br>') + '▍';
                 }
+                
                 aiMessageDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
+                
                 const speechBtn = document.createElement('button');
                 speechBtn.innerHTML = '朗读';
-                speechBtn.className = 'ml-2 mt-2 text-xs bg-gray-200 px-2 py-1 rounded fluent-btn';
+                speechBtn.className = 'ml-2 mt-2 text-xs bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 px-2 py-1 rounded fluent-btn text-gray-900 dark:text-gray-100';
                 speechBtn.onclick = () => playAudio(fullResponse, speechBtn);
                 aiMessageDiv.appendChild(document.createElement('br'));
                 aiMessageDiv.appendChild(speechBtn);
 
             } catch (error) {
                 aiMessageDiv.innerText = `抱歉，请求失败: ${error.message}`; 
-                aiMessageDiv.classList.add('text-red-500');
+                aiMessageDiv.classList.add('text-red-500', 'dark:text-red-400');
             } finally {
                 chatHistory.push({ role: 'assistant', content: fullResponse });
                 toggleInput(false);
@@ -228,10 +483,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const btn = e.target.closest('.ask-ai-details-btn');
             if (btn) {
                 modal.classList.remove('hidden');
+                modal.classList.add('flex');
                 chatLog.innerHTML = '';
                 const title = btn.dataset.bookTitle;
                 const isbn = btn.dataset.bookIsbn;
-                const initialPrompt = `你好！你是一个专业图书管理员，请提供《${title}》(ISBN: ${isbn}) 这本书的元中立、客观的内容梗概。严格遵守以下规则：\n1. 只使用所提供的书籍信息，不编造不存在的内容。\n2. 梗概长度控制在100-150字。\n3. 包含：核心主题、关键人物/论点、书籍特色。\n4. 语言风格：学术且亲切。`;
+                const initialPrompt = `你好！你是一个专业图书管理员，请提供《${title}》(ISBN: ${isbn}) 这本书的客观、中立的内容梗概。严格遵守以下规则：\n1. 只使用所提供的书籍信息，不编造不存在的内容。\n2. 梗概长度控制在100-150字。\n3. 包含：核心主题、关键人物/论点、书籍特色。\n4. 语言风格：学术且亲切。`;
                 chatHistory = [{ role: 'user', content: initialPrompt }];
                 renderMessage('user', `请帮我介绍一下《${title}》这本书`);
                 getAiResponse();
@@ -240,7 +496,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         closeBtn.addEventListener('click', () => {
             modal.classList.add('hidden');
-            if (currentAudioSource) { currentAudioSource.stop(); currentAudioSource = null; globalPlayingButton = null; }
+            modal.classList.remove('flex');
+            if (currentAudioSource) { 
+                currentAudioSource.stop(); 
+                currentAudioSource = null; 
+                globalPlayingButton = null; 
+            }
         });
     };
 
@@ -261,7 +522,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const msgWrapper = document.createElement('div');
             msgWrapper.className = `w-full flex ${role === 'user' ? 'justify-end' : 'justify-start'}`;
             const msgDiv = document.createElement('div');
-            msgDiv.className = `p-3 rounded-lg max-w-lg break-words ${role === 'user' ? 'bg-sky-100' : 'bg-white'}`;
+            msgDiv.className = `p-3 rounded-lg max-w-lg break-words ${role === 'user' ? 'bg-sky-100 dark:bg-sky-900 text-gray-900 dark:text-gray-100' : 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100'}`;
             msgDiv.innerHTML = content.replace(/\n/g, '<br>');
             msgWrapper.appendChild(msgDiv);
             chatLog.appendChild(msgWrapper);
@@ -288,12 +549,18 @@ document.addEventListener('DOMContentLoaded', () => {
             // Step 1: Expand Query
             let expandedQuery = '';
             try {
-                const expandRes = await fetch('/ai-expand-query', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: userQuery }) });
+                const expandRes = await fetch('/ai-expand-query', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ query: userQuery }) 
+                });
                 if(expandRes.ok) {
                     const expandData = await expandRes.json();
                     if(expandData.success) expandedQuery = expandData.expanded_query;
                 }
-            } catch (e) { console.error("Query expansion failed:", e); }
+            } catch (e) { 
+                console.error("Query expansion failed:", e); 
+            }
             
             const finalQueryForRec = expandedQuery || userQuery;
             
@@ -301,13 +568,20 @@ document.addEventListener('DOMContentLoaded', () => {
             const aiMessageDiv = renderMessage('assistant', '▍');
             let fullResponse = '';
             try {
-                const response = await fetch('/ai-search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: userQuery, expanded_query: finalQueryForRec }) });
+                const response = await fetch('/ai-search', { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ query: userQuery, expanded_query: finalQueryForRec }) 
+                });
+                
                 if (!response.ok) {
                     const err = await response.json();
                     throw new Error(err.error || `Server error: ${response.status}`);
                 }
+                
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder("utf-8");
+                
                 while (true) {
                     const { value, done } = await reader.read();
                     if (done) break;
@@ -315,18 +589,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     fullResponse += chunk;
                     aiMessageDiv.innerHTML = fullResponse.replace(/\n/g, '<br>') + '▍';
                 }
+                
                 aiMessageDiv.innerHTML = fullResponse.replace(/\n/g, '<br>');
+                
                 const speechBtn = document.createElement('button');
                 speechBtn.innerHTML = '朗读';
-                speechBtn.className = 'ml-2 mt-2 text-xs bg-gray-200 px-2 py-1 rounded fluent-btn';
-                speechBtn.onclick = () => playAudio('华小立为您推荐以下书籍', speechBtn);
+                speechBtn.className = 'ml-2 mt-2 text-xs bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 px-2 py-1 rounded fluent-btn text-gray-900 dark:text-gray-100';
+                speechBtn.onclick = () => playAudio(fullResponse, speechBtn);
                 aiMessageDiv.appendChild(document.createElement('br'));
                 aiMessageDiv.appendChild(speechBtn);
 
                 await fetchRecommendations(finalQueryForRec);
             } catch (error) {
                 aiMessageDiv.innerText = `抱歉，请求失败: ${error.message}`; 
-                aiMessageDiv.classList.add('text-red-500');
+                aiMessageDiv.classList.add('text-red-500', 'dark:text-red-400');
             } finally {
                 toggleInput(false, '请描述您想找的书...');
                 userInput.focus();
@@ -335,13 +611,22 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const fetchRecommendations = async (query) => {
             try {
-                const res = await fetch('/ai-recommend', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({query}) });
+                const res = await fetch('/ai-recommend', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify({query}) 
+                });
                 const {success, recommendations} = await res.json();
+                
                 if (!success || !recommendations.length) return;
                 
-                let recHTML = `<h4 class="text-sm font-bold text-gray-600 mb-2 mt-2 border-t pt-2">AI为您推荐了以下可借阅书籍：</h4>`;
+                let recHTML = `<h4 class="text-sm font-bold text-gray-600 dark:text-gray-400 mb-2 mt-2 border-t border-gray-200 dark:border-gray-600 pt-2">AI为您推荐了以下可借阅书籍：</h4>`;
                 recommendations.forEach(({title, code}) => {
-                    recHTML += `<div class="p-2 bg-white/80 rounded-lg flex justify-between items-center mb-2"><span class="text-sm">${title}</span><button data-code="${code}" class="borrow-rec-btn bg-theme-primary text-white px-2 py-1 text-xs fluent-btn">借阅</button></div>`;
+                    recHTML += `
+                        <div class="p-2 bg-white/80 dark:bg-gray-700/80 rounded-lg flex justify-between items-center mb-2 border border-gray-200 dark:border-gray-600">
+                            <span class="text-sm flex-grow mr-2 text-gray-900 dark:text-gray-100">${title}</span>
+                            <button data-code="${code}" class="borrow-rec-btn bg-theme-primary hover:bg-theme-primary-dark text-white px-3 py-1 text-xs fluent-btn flex-shrink-0">借阅</button>
+                        </div>`;
                 });
                 recommendationsContainer.innerHTML = recHTML;
             } catch (error) {
@@ -354,7 +639,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         openBtn.addEventListener('click', () => {
             modal.classList.remove('hidden');
-            chatLog.innerHTML = `<div class="w-full flex justify-start"><div class="p-3 rounded-lg bg-white">你好！请用自然语言描述你想找什么样的书。</div></div>`;
+            modal.classList.add('flex');
+            chatLog.innerHTML = `<div class="w-full flex justify-start"><div class="p-3 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100">你好！请用自然语言描述你想找什么样的书。</div></div>`;
             recommendationsContainer.innerHTML = '';
             const query = document.getElementById('main-search-input').value.trim();
             if (query) {
@@ -365,7 +651,12 @@ document.addEventListener('DOMContentLoaded', () => {
         
         closeBtn.addEventListener('click', () => {
             modal.classList.add('hidden');
-            if (currentAudioSource) { currentAudioSource.stop(); currentAudioSource = null; globalPlayingButton = null; }
+            modal.classList.remove('flex');
+            if (currentAudioSource) { 
+                currentAudioSource.stop(); 
+                currentAudioSource = null; 
+                globalPlayingButton = null; 
+            }
         });
     };
     
@@ -388,18 +679,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 const response = await fetch(`/borrow-by-code/${bookCode}`, { method: 'POST' });
                 const result = await response.json();
                 if (result.success) {
-                    button.className = 'bg-gray-400 text-white px-2 py-1 text-xs fluent-btn cursor-not-allowed';
+                    button.className = 'bg-gray-400 text-white px-3 py-1 text-xs fluent-btn cursor-not-allowed';
                     button.innerText = '已借阅';
-                    setTimeout(() => window.location.reload(), 1000); 
+                    // 延迟刷新页面以显示成功状态
+                    setTimeout(() => window.location.reload(), 1500); 
                 } else {
                     button.innerText = '失败';
                     button.title = result.message;
-                    button.className = 'bg-red-500 text-white px-2 py-1 text-xs fluent-btn';
+                    button.className = 'bg-red-500 hover:bg-red-600 text-white px-3 py-1 text-xs fluent-btn';
                     button.disabled = false;
                 }
             } catch {
                 button.innerText = '错误';
-                button.className = 'bg-red-500 text-white px-2 py-1 text-xs fluent-btn';
+                button.className = 'bg-red-500 hover:bg-red-600 text-white px-3 py-1 text-xs fluent-btn';
                 button.disabled = false;
             }
         });

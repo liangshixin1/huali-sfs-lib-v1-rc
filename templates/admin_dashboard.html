@@ -4,132 +4,410 @@
 {% block title %}管理员面板{% endblock %}
 
 {% block content %}
-<div class="mb-4 border-b border-gray-200">
-    <ul class="flex flex-wrap -mb-px text-sm font-medium text-center" id="adminTab" role="tablist">
-        <li class="mr-2" role="presentation"><button class="inline-block p-4 border-b-2 rounded-t-lg" id="dashboard-tab" data-tabs-target="#dashboard" type="button" role="tab" aria-selected="true">数据看板</button></li>
-        <li class="mr-2" role="presentation"><button class="inline-block p-4 border-b-2 rounded-t-lg hover:text-gray-600 hover:border-gray-300" id="books-tab" data-tabs-target="#books" type="button" role="tab">书目管理</button></li>
-        <li class="mr-2" role="presentation"><button class="inline-block p-4 border-b-2 rounded-t-lg hover:text-gray-600 hover:border-gray-300" id="users-tab" data-tabs-target="#users" type="button" role="tab">用户管理</button></li>
-    </ul>
-</div>
+<!-- 管理员专用：禁用所有动画效果 -->
+<style>
+.admin-no-animation * {
+    transition: none !important;
+    animation: none !important;
+    transform: none !important;
+}
 
-<div id="adminTabContent">
-    <!-- 数据看板 Tab -->
-    <div class="hidden p-4 rounded-lg bg-gray-50/40" id="dashboard" role="tabpanel" aria-labelledby="dashboard-tab">
-        <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            <div class="lg:col-span-2 space-y-6">
-                <div class="fluent-card">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4">AI 智能搜书管理</h2>
-                    <p class="text-sm text-gray-600 mb-4">当书库有重要更新后，请点击下方按钮，将最新的书目信息同步给AI检索引擎。</p>
-                    <form action="{{ url_for('update_ai_catalog') }}" method="POST">
-                         <button type="submit" class="w-full bg-sky-600 text-white px-4 py-2 hover:bg-sky-700 fluent-btn">更新AI检索引擎</button>
+.admin-no-animation .fluent-card:hover {
+    transform: none !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.admin-no-animation .fluent-btn:hover {
+    transform: none !important;
+}
+
+.admin-no-animation .fluent-btn:active {
+    transform: none !important;
+}
+
+.admin-no-animation tbody tr:hover {
+    transform: none !important;
+    background-color: rgba(170, 43, 48, 0.05);
+}
+
+.admin-no-animation .bg-blue-50:hover,
+.admin-no-animation .bg-green-50:hover,
+.admin-no-animation .bg-yellow-50:hover,
+.admin-no-animation .bg-purple-50:hover {
+    transform: none !important;
+}
+
+.admin-no-animation #adminTab button::after {
+    animation: none !important;
+}
+
+.admin-no-animation #modal-backdrop {
+    animation: none !important;
+}
+
+.admin-no-animation #modal-backdrop .fluent-card {
+    animation: none !important;
+}
+</style>
+
+<div class="admin-no-animation">
+    <div class="mb-4 border-b border-gray-200">
+        <ul class="flex flex-wrap -mb-px text-sm font-medium text-center overflow-x-auto" id="adminTab" role="tablist">
+            <li class="mr-2 flex-shrink-0" role="presentation">
+                <button class="inline-block p-3 sm:p-4 border-b-2 rounded-t-lg whitespace-nowrap" id="dashboard-tab" data-tabs-target="#dashboard" type="button" role="tab" aria-selected="true">
+                    <i class="fas fa-chart-bar mr-1 sm:mr-2"></i>
+                    <span class="hidden sm:inline">数据看板</span>
+                    <span class="sm:hidden">看板</span>
+                </button>
+            </li>
+            <li class="mr-2 flex-shrink-0" role="presentation">
+                <button class="inline-block p-3 sm:p-4 border-b-2 rounded-t-lg hover:text-gray-600 hover:border-gray-300 whitespace-nowrap" id="books-tab" data-tabs-target="#books" type="button" role="tab">
+                    <i class="fas fa-book mr-1 sm:mr-2"></i>
+                    <span class="hidden sm:inline">书目管理</span>
+                    <span class="sm:hidden">书目</span>
+                </button>
+            </li>
+            <li class="mr-2 flex-shrink-0" role="presentation">
+                <button class="inline-block p-3 sm:p-4 border-b-2 rounded-t-lg hover:text-gray-600 hover:border-gray-300 whitespace-nowrap" id="users-tab" data-tabs-target="#users" type="button" role="tab">
+                    <i class="fas fa-users mr-1 sm:mr-2"></i>
+                    <span class="hidden sm:inline">用户管理</span>
+                    <span class="sm:hidden">用户</span>
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <div id="adminTabContent">
+        <!-- 数据看板 Tab -->
+        <div class="hidden p-2 sm:p-4 rounded-lg bg-gray-50/40" id="dashboard" role="tabpanel" aria-labelledby="dashboard-tab">
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6">
+                <div class="lg:col-span-2 space-y-4 sm:space-y-6">
+                    <!-- AI 智能搜书管理 -->
+                    <div class="fluent-card">
+                        <h2 class="text-lg sm:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">
+                            <i class="fas fa-robot text-sky-500 mr-2"></i>AI 智能搜书管理
+                        </h2>
+                        <p class="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">当书库有重要更新后，请点击下方按钮，将最新的书目信息同步给AI检索引擎。</p>
+                        <form action="{{ url_for('update_ai_catalog') }}" method="POST">
+                             <button type="submit" class="w-full bg-sky-600 text-white px-3 sm:px-4 py-2 hover:bg-sky-700 fluent-btn text-sm sm:text-base">
+                                 <i class="fas fa-sync-alt mr-2"></i>更新AI检索引擎
+                             </button>
+                        </form>
+                    </div>
+
+                    <!-- 数据导入与手动还书 -->
+                    <div class="fluent-card">
+                        <h2 class="text-lg sm:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">
+                            <i class="fas fa-upload text-blue-500 mr-2"></i>数据管理
+                        </h2>
+                        <div class="space-y-3 sm:space-y-4">
+                           <form action="{{ url_for('import_books') }}" method="post" enctype="multipart/form-data" class="space-y-2 p-3 sm:p-4 border rounded-lg bg-gray-50/50">
+                               <label class="text-sm font-medium text-gray-700 flex items-center">
+                                   <i class="fas fa-file-excel text-green-600 mr-2"></i>导入图书数据 (.xlsx)
+                               </label>
+                               <input type="file" name="book_file" accept=".xlsx" required class="block w-full text-xs sm:text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-semibold file:bg-theme-primary file:text-white hover:file:bg-theme-primary-dark cursor-pointer">
+                               <div class="text-xs sm:text-sm space-x-4">
+                                   <label class="inline-flex items-center">
+                                       <input type="radio" name="upload_mode" value="append" checked class="mr-1"> 新增
+                                   </label>
+                                   <label class="inline-flex items-center">
+                                       <input type="radio" name="upload_mode" value="overwrite" class="mr-1"> 覆盖
+                                   </label>
+                               </div>
+                               <button type="submit" onclick="return confirmImport(this.form)" class="w-full bg-blue-600 text-white px-3 sm:px-4 py-2 hover:bg-blue-700 fluent-btn text-sm sm:text-base">
+                                   <i class="fas fa-upload mr-2"></i>上传导入
+                               </button>
+                           </form>
+                           
+                           <form action="{{ url_for('admin_return_book') }}" method="post" class="space-y-2 p-3 sm:p-4 border rounded-lg bg-gray-50/50">
+                               <label class="text-sm font-medium text-gray-700 flex items-center">
+                                   <i class="fas fa-undo text-theme-primary mr-2"></i>手动还书
+                               </label>
+                               <input type="text" name="book_code" placeholder="输入图书编码..." class="w-full px-3 sm:px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/50 text-sm sm:text-base">
+                               <button type="submit" class="w-full bg-theme-primary text-white px-3 sm:px-4 py-2 hover:bg-theme-primary-dark fluent-btn text-sm sm:text-base">
+                                   <i class="fas fa-check mr-2"></i>确认还书
+                               </button>
+                           </form>
+                        </div>
+                    </div>
+
+                    <!-- 读者想读列表 -->
+                    <div class="fluent-card">
+                        <h2 class="text-lg sm:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">
+                            <i class="fas fa-heart text-red-500 mr-2"></i>读者想读列表
+                        </h2>
+                        {% if wants_list %}
+                            <ul class="space-y-2 max-h-48 sm:max-h-60 overflow-y-auto">
+                                {% for book_title, count in wants_list %}
+                                    <li class="flex justify-between items-center bg-gray-50/80 p-2 sm:p-3 rounded-lg">
+                                        <span class="text-xs sm:text-sm font-medium text-gray-700 flex-grow mr-2">{{ book_title }}</span>
+                                        <span class="text-xs sm:text-sm font-bold text-theme-primary bg-theme-primary/10 px-2 py-1 rounded-full flex-shrink-0">{{ count }} 人</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <div class="text-center text-gray-500 py-4">
+                                <i class="fas fa-heart-broken text-gray-300 text-2xl mb-2"></i>
+                                <p class="text-sm">暂无读者想读的书籍。</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- 借阅记录 -->
+                <div class="fluent-card lg:col-span-3">
+                    <h2 class="text-lg sm:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">
+                        <i class="fas fa-list text-green-500 mr-2"></i>所有借阅记录
+                    </h2>
+                    
+                    <!-- 筛选表单 -->
+                    <form method="GET" action="{{ url_for('admin_dashboard') }}" class="mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50/70 rounded-lg">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                            <div>
+                                <label for="name" class="block text-xs sm:text-sm font-medium mb-1">借阅人</label>
+                                <input type="text" name="name" id="name" value="{{ filters.name }}" class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-xs sm:text-sm" placeholder="输入姓名...">
+                            </div>
+                            <div>
+                                <label for="status" class="block text-xs sm:text-sm font-medium mb-1">状态</label>
+                                <select name="status" id="status" class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-xs sm:text-sm">
+                                    <option value="all" {% if filters.status == 'all' %}selected{% endif %}>全部</option>
+                                    <option value="borrowed" {% if filters.status == 'borrowed' %}selected{% endif %}>借阅中</option>
+                                    <option value="returned" {% if filters.status == 'returned' %}selected{% endif %}>已归还</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="start_date" class="block text-xs sm:text-sm font-medium mb-1">开始日期</label>
+                                <input type="date" name="start_date" id="start_date" value="{{ filters.start_date }}" class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-xs sm:text-sm">
+                            </div>
+                            <div>
+                                <label for="end_date" class="block text-xs sm:text-sm font-medium mb-1">结束日期</label>
+                                <input type="date" name="end_date" id="end_date" value="{{ filters.end_date }}" class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-xs sm:text-sm">
+                            </div>
+                        </div>
+                        <div class="mt-3 sm:mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
+                            <button type="submit" class="bg-theme-primary text-white px-3 sm:px-4 py-2 hover:bg-theme-primary-dark fluent-btn flex-grow sm:flex-grow-0 text-sm sm:text-base">
+                                <i class="fas fa-filter mr-2"></i>筛选
+                            </button>
+                            <a href="{{ url_for('admin_export_records', **filters) }}" class="bg-green-600 text-white px-3 sm:px-4 py-2 hover:bg-green-700 fluent-btn text-center flex-grow sm:flex-grow-0 text-sm sm:text-base">
+                                <i class="fas fa-download mr-2"></i>导出
+                            </a>
+                        </div>
                     </form>
-                </div>
-                <div class="fluent-card">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4">数据导入与手动还书</h2>
-                    <div class="space-y-4">
-                       <form action="{{ url_for('import_books') }}" method="post" enctype="multipart/form-data" class="space-y-2 p-4 border rounded-lg">
-                           <label class="text-sm font-medium text-gray-700">导入图书数据 (.xlsx)</label>
-                           <input type="file" name="book_file" accept=".xlsx" required class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-semibold file:bg-theme-primary file:text-white hover:file:bg-theme-primary-dark cursor-pointer">
-                           <div class="text-sm"><label><input type="radio" name="upload_mode" value="append" checked> 新增</label><label class="ml-4"><input type="radio" name="upload_mode" value="overwrite"> 覆盖</label></div>
-                           <button type="submit" onclick="return confirmImport(this.form)" class="w-full bg-blue-600 text-white px-4 py-2 hover:bg-blue-700 fluent-btn">上传导入</button>
-                       </form>
-                       <form action="{{ url_for('admin_return_book') }}" method="post" class="space-y-2 p-4 border rounded-lg">
-                           <label class="text-sm font-medium text-gray-700">手动还书</label>
-                           <input type="text" name="book_code" placeholder="输入图书编码..." class="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/50">
-                           <button type="submit" class="w-full bg-theme-primary text-white px-4 py-2 hover:bg-theme-primary-dark fluent-btn">确认还书</button>
-                       </form>
-                    </div>
-                </div>
-                <div class="fluent-card">
-                    <h2 class="text-xl font-semibold text-gray-800 mb-4">读者想读列表</h2>
-                    {% if wants_list %}
-                    <ul class="space-y-2 max-h-60 overflow-y-auto">
-                        {% for book_title, count in wants_list %}<li class="flex justify-between items-center bg-gray-50/80 p-2 rounded-lg"><span class="text-sm font-medium text-gray-700">{{ book_title }}</span><span class="text-sm font-bold text-theme-primary bg-theme-primary/10 px-2 py-1 rounded-full">{{ count }} 人</span></li>{% endfor %}
-                    </ul>
-                    {% else %}<p class="text-center text-gray-500">暂无读者想读的书籍。</p>{% endif %}
-                </div>
-            </div>
-            <div class="fluent-card lg:col-span-3">
-                <h2 class="text-xl font-semibold text-gray-800 mb-4">所有借阅记录</h2>
-                <form method="GET" action="{{ url_for('admin_dashboard') }}" class="mb-6 p-4 bg-gray-50/70 rounded-lg">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div><label for="name" class="block text-sm font-medium">借阅人</label><input type="text" name="name" id="name" value="{{ filters.name }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary sm:text-sm"></div>
-                        <div><label for="status" class="block text-sm font-medium">状态</label><select name="status" id="status" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary sm:text-sm"><option value="all" {% if filters.status == 'all' %}selected{% endif %}>全部</option><option value="borrowed" {% if filters.status == 'borrowed' %}selected{% endif %}>借阅中</option><option value="returned" {% if filters.status == 'returned' %}selected{% endif %}>已归还</option></select></div>
-                        <div><label for="start_date" class="block text-sm font-medium">开始日期</label><input type="date" name="start_date" id="start_date" value="{{ filters.start_date }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary sm:text-sm"></div>
-                        <div><label for="end_date" class="block text-sm font-medium">结束日期</label><input type="date" name="end_date" id="end_date" value="{{ filters.end_date }}" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary sm:text-sm"></div>
-                    </div>
-                    <div class="mt-4 flex items-center gap-4"><button type="submit" class="bg-theme-primary text-white px-4 py-2 hover:bg-theme-primary-dark fluent-btn flex-grow">筛选</button><a href="{{ url_for('admin_export_records', **filters) }}" class="bg-green-600 text-white px-4 py-2 hover:bg-green-700 fluent-btn flex-grow text-center">导出</a></div>
-                </form>
-                <div class="overflow-x-auto"><table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50/50"><tr><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">书名</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">借阅人</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">日期</th><th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th></tr></thead>
-                    <tbody class="bg-white/50 divide-y divide-gray-200">
-                        {% for record in records_pagination.items %}<tr><td class="px-4 py-4 whitespace-nowrap text-sm font-medium">{{ record.book.title }}</td><td class="px-4 py-4 whitespace-nowrap text-sm">{{ record.borrower.full_name or record.borrower.username }}</td><td class="px-4 py-4 whitespace-nowrap text-sm">{{ record.borrow_date.strftime('%Y-%m-%d') }}</td><td class="px-4 py-4 whitespace-nowrap text-sm">{% if record.status == 'returned' %}<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">已归还</span>{% else %}<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">借阅中</span>{% endif %}</td></tr>
-                        {% else %}<tr><td colspan="4" class="px-6 py-4 text-center text-gray-500">没有找到匹配的记录。</td></tr>{% endfor %}
-                    </tbody></table></div>
-                {% if records_pagination.pages > 1 %}{{ render_pagination(records_pagination, 'admin_dashboard', query_params=filters) }}{% endif %}
-            </div>
-        </div>
-    </div>
-    
-    <!-- 书目管理 Tab -->
-    <div class="hidden p-4 rounded-lg bg-gray-50/40" id="books" role="tabpanel" aria-labelledby="books-tab">
-        <div class="fluent-card">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold text-gray-800">书目数据管理</h2>
-                <button id="addBookBtn" class="bg-green-600 text-white px-4 py-2 hover:bg-green-700 fluent-btn">添加新书</button>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50/50"><tr><th class="px-6 py-3 text-left">书名</th><th class="px-6 py-3 text-left">书柜号</th><th class="px-6 py-3 text-left">编码</th><th class="px-6 py-3 text-center">库存/可用</th><th class="px-6 py-3 text-center">操作</th></tr></thead>
-                    <tbody>
-                        {% for book in books %}
-                        <tr>
-                            <td class="px-6 py-4">{{ book.title }}</td>
-                            <td class="px-6 py-4">{{ book.bookshelf_number }}</td>
-                            <td class="px-6 py-4">{{ book.book_code }}</td>
-                            <td class="px-6 py-4 text-center">{{ book.stock }} / {{ book.quantity_available }}</td>
-                            <td class="px-6 py-4 text-center space-x-2">
-                                <button class="editBookBtn text-white bg-blue-500 hover:bg-blue-600 px-3 py-1 fluent-btn" 
-                                    data-id="{{ book.id }}"
-                                    data-title="{{ book.title }}"
-                                    data-publisher="{{ book.publisher or '' }}"
-                                    data-isbn="{{ book.isbn }}"
-                                    data-book_code="{{ book.book_code }}"
-                                    data-stock="{{ book.stock }}"
-                                    data-bookshelf_number="{{ book.bookshelf_number or '' }}">编辑</button>
-                                <form action="{{ url_for('admin_delete_book', book_id=book.id) }}" method="POST" class="inline" onsubmit="return confirm('确定要删除《{{ book.title }}》吗？此操作将一并删除所有相关借阅记录，不可撤销。');"><button type="submit" class="text-white bg-red-600 hover:bg-red-700 px-3 py-1 fluent-btn">删除</button></form>
-                            </td>
-                        </tr>
-                        {% else %}<tr><td colspan="5" class="text-center py-4">书库为空。</td></tr>{% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
 
-    <!-- 用户管理 Tab -->
-    <div class="hidden p-4 rounded-lg bg-gray-50/40" id="users" role="tabpanel" aria-labelledby="users-tab">
-        <div class="fluent-card">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold text-gray-800">教职工账户管理</h2>
-                <button id="addUserBtn" class="bg-green-600 text-white px-4 py-2 hover:bg-green-700 fluent-btn">添加新用户</button>
+                    <!-- 记录表格 -->
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                            <thead class="bg-gray-50/50">
+                                <tr>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">书名</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">借阅人</th>
+                                    <th class="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">日期</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white/50 divide-y divide-gray-200">
+                                {% for record in records_pagination.items %}
+                                    <tr class="hover:bg-gray-50/70">
+                                        <td class="px-2 sm:px-4 py-2 sm:py-4">
+                                            <div class="font-medium text-gray-900">{{ record.book.title[:20] }}{% if record.book.title|length > 20 %}...{% endif %}</div>
+                                            <div class="text-xs text-gray-500 sm:hidden">{{ record.borrow_date.strftime('%m-%d') }}</div>
+                                        </td>
+                                        <td class="px-2 sm:px-4 py-2 sm:py-4">{{ record.borrower.full_name or record.borrower.username }}</td>
+                                        <td class="hidden sm:table-cell px-4 py-4">{{ record.borrow_date.strftime('%Y-%m-%d') }}</td>
+                                        <td class="px-2 sm:px-4 py-2 sm:py-4">
+                                            {% if record.status == 'returned' %}
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">已归还</span>
+                                            {% else %}
+                                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-orange-100 text-orange-800">借阅中</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% else %}
+                                    <tr>
+                                        <td colspan="4" class="px-6 py-8 text-center text-gray-500">
+                                            <div class="flex flex-col items-center">
+                                                <i class="fas fa-search text-gray-300 text-2xl mb-2"></i>
+                                                <p>没有找到匹配的记录。</p>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% if records_pagination.pages > 1 %}
+                        {{ render_pagination(records_pagination, 'admin_dashboard', query_params=filters) }}
+                    {% endif %}
+                </div>
             </div>
-            <div class="overflow-x-auto">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50/50"><tr><th class="px-6 py-3 text-left">工号</th><th class="px-6 py-3 text-left">姓名</th><th class="px-6 py-3 text-center">操作</th></tr></thead>
-                    <tbody>
-                        {% for user in faculty_users %}
-                        <tr>
-                            <td class="px-6 py-4">{{ user.username }}</td>
-                            <td class="px-6 py-4">{{ user.full_name }}</td>
-                            <td class="px-6 py-4 text-center space-x-2">
-                                <button class="editUserBtn text-white bg-blue-500 hover:bg-blue-600 px-3 py-1 fluent-btn" data-id="{{ user.id }}" data-username="{{ user.username }}" data-name="{{ user.full_name }}">编辑</button>
-                                <form action="{{ url_for('admin_delete_user', user_id=user.id) }}" method="POST" class="inline" onsubmit="return confirm('确定要删除用户 {{ user.full_name }} 吗？该用户所有借阅记录也将被删除。');"><button type="submit" class="text-white bg-red-600 hover:bg-red-700 px-3 py-1 fluent-btn">删除</button></form>
-                            </td>
-                        </tr>
-                        {% else %}<tr><td colspan="3" class="text-center py-4">暂无教职工账户。</td></tr>{% endfor %}
-                    </tbody>
-                </table>
+        </div>
+        
+        <!-- 书目管理 Tab -->
+        <div class="hidden p-2 sm:p-4 rounded-lg bg-gray-50/40" id="books" role="tabpanel" aria-labelledby="books-tab">
+            <div class="fluent-card">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 gap-2 sm:gap-4">
+                    <h2 class="text-lg sm:text-xl font-semibold text-gray-800">
+                        <i class="fas fa-book text-blue-500 mr-2"></i>书目数据管理
+                    </h2>
+                    <button id="addBookBtn" class="w-full sm:w-auto bg-green-600 text-white px-3 sm:px-4 py-2 hover:bg-green-700 fluent-btn text-sm sm:text-base">
+                        <i class="fas fa-plus mr-2"></i>添加新书
+                    </button>
+                </div>
+                
+                <!-- 书目统计 -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                    <div class="bg-blue-50 p-3 rounded-lg text-center">
+                        <div class="text-lg sm:text-xl font-bold text-blue-600">{{ books|length }}</div>
+                        <div class="text-xs sm:text-sm text-gray-600">总书目</div>
+                    </div>
+                    <div class="bg-green-50 p-3 rounded-lg text-center">
+                        <div class="text-lg sm:text-xl font-bold text-green-600">{{ books | selectattr('quantity_available', 'greaterthan', 0) | list | length }}</div>
+                        <div class="text-xs sm:text-sm text-gray-600">可借阅</div>
+                    </div>
+                    <div class="bg-yellow-50 p-3 rounded-lg text-center">
+                        <div class="text-lg sm:text-xl font-bold text-yellow-600">{{ books | selectattr('quantity_available', 'equalto', 0) | list | length }}</div>
+                        <div class="text-xs sm:text-sm text-gray-600">已借完</div>
+                    </div>
+                    <div class="bg-purple-50 p-3 rounded-lg text-center">
+                        <div class="text-lg sm:text-xl font-bold text-purple-600">{{ books | sum(attribute='stock') }}</div>
+                        <div class="text-xs sm:text-sm text-gray-600">总库存</div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                        <thead class="bg-gray-50/50">
+                            <tr>
+                                <th class="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">书名</th>
+                                <th class="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">书柜号</th>
+                                <th class="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">编码</th>
+                                <th class="px-2 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase">库存/可用</th>
+                                <th class="px-2 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            {% for book in books %}
+                                <tr class="hover:bg-gray-50/70">
+                                    <td class="px-2 sm:px-6 py-2 sm:py-4">
+                                        <div class="font-medium text-gray-900">{{ book.title[:30] }}{% if book.title|length > 30 %}...{% endif %}</div>
+                                        <div class="text-xs text-gray-500 sm:hidden">{{ book.bookshelf_number }}</div>
+                                    </td>
+                                    <td class="hidden sm:table-cell px-6 py-4 text-gray-500">{{ book.bookshelf_number }}</td>
+                                    <td class="px-2 sm:px-6 py-2 sm:py-4 text-gray-500">{{ book.book_code }}</td>
+                                    <td class="px-2 sm:px-6 py-2 sm:py-4 text-center">
+                                        <span class="font-medium {% if book.quantity_available > 0 %}text-green-600{% else %}text-red-600{% endif %}">
+                                            {{ book.stock }} / {{ book.quantity_available }}
+                                        </span>
+                                    </td>
+                                    <td class="px-2 sm:px-6 py-2 sm:py-4 text-center">
+                                        <div class="flex flex-col sm:flex-row gap-1 sm:gap-2 justify-center">
+                                            <button class="editBookBtn text-white bg-blue-500 hover:bg-blue-600 px-2 sm:px-3 py-1 fluent-btn text-xs" 
+                                                data-id="{{ book.id }}"
+                                                data-title="{{ book.title }}"
+                                                data-publisher="{{ book.publisher or '' }}"
+                                                data-isbn="{{ book.isbn }}"
+                                                data-book_code="{{ book.book_code }}"
+                                                data-stock="{{ book.stock }}"
+                                                data-bookshelf_number="{{ book.bookshelf_number or '' }}">
+                                                <i class="fas fa-edit mr-1"></i><span class="hidden sm:inline">编辑</span>
+                                            </button>
+                                            <form action="{{ url_for('admin_delete_book', book_id=book.id) }}" method="POST" class="inline" onsubmit="return confirm('确定要删除《{{ book.title }}》吗？此操作将一并删除所有相关借阅记录，不可撤销。');">
+                                                <button type="submit" class="text-white bg-red-600 hover:bg-red-700 px-2 sm:px-3 py-1 fluent-btn text-xs">
+                                                    <i class="fas fa-trash mr-1"></i><span class="hidden sm:inline">删除</span>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-8">
+                                        <div class="flex flex-col items-center">
+                                            <i class="fas fa-book-open text-gray-300 text-2xl mb-2"></i>
+                                            <p class="text-gray-500">书库为空。</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 用户管理 Tab -->
+        <div class="hidden p-2 sm:p-4 rounded-lg bg-gray-50/40" id="users" role="tabpanel" aria-labelledby="users-tab">
+            <div class="fluent-card">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 gap-2 sm:gap-4">
+                    <h2 class="text-lg sm:text-xl font-semibold text-gray-800">
+                        <i class="fas fa-users text-purple-500 mr-2"></i>教职工账户管理
+                    </h2>
+                    <button id="addUserBtn" class="w-full sm:w-auto bg-green-600 text-white px-3 sm:px-4 py-2 hover:bg-green-700 fluent-btn text-sm sm:text-base">
+                        <i class="fas fa-user-plus mr-2"></i>添加新用户
+                    </button>
+                </div>
+
+                <!-- 用户统计 -->
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
+                    <div class="bg-blue-50 p-3 rounded-lg text-center">
+                        <div class="text-lg sm:text-xl font-bold text-blue-600">{{ faculty_users|length }}</div>
+                        <div class="text-xs sm:text-sm text-gray-600">总用户数</div>
+                    </div>
+                    <div class="bg-green-50 p-3 rounded-lg text-center">
+                        <div class="text-lg sm:text-xl font-bold text-green-600">{{ faculty_users | selectattr('records') | list | length }}</div>
+                        <div class="text-xs sm:text-sm text-gray-600">活跃用户</div>
+                    </div>
+                    <div class="bg-purple-50 p-3 rounded-lg text-center col-span-2 sm:col-span-1">
+                        <div class="text-lg sm:text-xl font-bold text-purple-600">1</div>
+                        <div class="text-xs sm:text-sm text-gray-600">管理员</div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 text-xs sm:text-sm">
+                        <thead class="bg-gray-50/50">
+                            <tr>
+                                <th class="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">工号</th>
+                                <th class="px-2 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">姓名</th>
+                                <th class="hidden sm:table-cell px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">借阅数</th>
+                                <th class="px-2 sm:px-6 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            {% for user in faculty_users %}
+                                <tr class="hover:bg-gray-50/70">
+                                    <td class="px-2 sm:px-6 py-2 sm:py-4 font-mono text-gray-900">{{ user.username }}</td>
+                                    <td class="px-2 sm:px-6 py-2 sm:py-4 font-medium text-gray-900">{{ user.full_name }}</td>
+                                    <td class="hidden sm:table-cell px-6 py-4 text-center text-gray-500">{{ user.records|length }}</td>
+                                    <td class="px-2 sm:px-6 py-2 sm:py-4 text-center">
+                                        <div class="flex flex-col sm:flex-row gap-1 sm:gap-2 justify-center">
+                                            <button class="editUserBtn text-white bg-blue-500 hover:bg-blue-600 px-2 sm:px-3 py-1 fluent-btn text-xs" 
+                                                data-id="{{ user.id }}" 
+                                                data-username="{{ user.username }}" 
+                                                data-name="{{ user.full_name }}">
+                                                <i class="fas fa-edit mr-1"></i><span class="hidden sm:inline">编辑</span>
+                                            </button>
+                                            <form action="{{ url_for('admin_delete_user', user_id=user.id) }}" method="POST" class="inline" onsubmit="return confirm('确定要删除用户 {{ user.full_name }} 吗？该用户所有借阅记录也将被删除。');">
+                                                <button type="submit" class="text-white bg-red-600 hover:bg-red-700 px-2 sm:px-3 py-1 fluent-btn text-xs">
+                                                    <i class="fas fa-trash mr-1"></i><span class="hidden sm:inline">删除</span>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" class="text-center py-8">
+                                        <div class="flex flex-col items-center">
+                                            <i class="fas fa-user-slash text-gray-300 text-2xl mb-2"></i>
+                                            <p class="text-gray-500">暂无教职工账户。</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
@@ -146,6 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { btn: document.getElementById('books-tab'), panel: document.getElementById('books') },
         { btn: document.getElementById('users-tab'), panel: document.getElementById('users') }
     ];
+    
     function switchTab(selectedTab) {
         tabs.forEach(tab => {
             const isSelected = tab.btn === selectedTab;
@@ -157,45 +436,126 @@ document.addEventListener('DOMContentLoaded', () => {
             tab.panel.classList.toggle('hidden', !isSelected);
         });
     }
+    
     switchTab(tabs[0].btn); 
     tabs.forEach(tab => tab.btn.addEventListener('click', () => switchTab(tab.btn)));
 
     // Generic Modal Logic
     const modalContainer = document.getElementById('modal-container');
+    
     const createModal = (content) => {
-        modalContainer.innerHTML = `<div class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center" id="modal-backdrop"><div class="fluent-card w-full max-w-md mx-4">${content}</div></div>`;
+        modalContainer.innerHTML = `
+            <div class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" id="modal-backdrop">
+                <div class="fluent-card w-full max-w-md mx-auto max-h-screen overflow-y-auto">
+                    ${content}
+                </div>
+            </div>`;
+        
         document.getElementById('modal-backdrop').addEventListener('click', e => {
-            if (e.target.id === 'modal-backdrop' || e.target.classList.contains('close-modal-btn')) closeModal();
+            if (e.target.id === 'modal-backdrop' || e.target.classList.contains('close-modal-btn')) {
+                closeModal();
+            }
         });
+        
+        document.body.style.overflow = 'hidden';
     };
-    const closeModal = () => { modalContainer.innerHTML = ''; };
+    
+    const closeModal = () => { 
+        modalContainer.innerHTML = '';
+        document.body.style.overflow = '';
+    };
 
     // Book Modals
     document.getElementById('addBookBtn').addEventListener('click', () => {
         createModal(`
             <form action="{{ url_for('admin_add_book') }}" method="POST" class="space-y-4">
-                <h3 class="text-lg font-medium">添加新书</h3>
-                <div><label class="block text-sm">书名</label><input name="title" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">出版社</label><input name="publisher" class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">ISBN</label><input name="isbn" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">图书编码</label><input name="book_code" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">书柜号</label><input name="bookshelf_number" class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">库存量</label><input name="stock" type="number" value="1" min="0" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div class="flex justify-end gap-2"><button type="button" class="close-modal-btn bg-gray-200 px-4 py-2 fluent-btn">取消</button><button type="submit" class="bg-green-600 text-white px-4 py-2 fluent-btn">确认添加</button></div>
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium">
+                        <i class="fas fa-plus-circle text-green-500 mr-2"></i>添加新书
+                    </h3>
+                    <button type="button" class="close-modal-btn text-gray-400 hover:text-gray-600 text-xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">书名 <span class="text-red-500">*</span></label>
+                    <input name="title" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm" placeholder="请输入书名">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">出版社</label>
+                    <input name="publisher" class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm" placeholder="请输入出版社">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">ISBN <span class="text-red-500">*</span></label>
+                    <input name="isbn" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm" placeholder="请输入ISBN">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">图书编码 <span class="text-red-500">*</span></label>
+                    <input name="book_code" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm" placeholder="请输入图书编码">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">书柜号</label>
+                    <input name="bookshelf_number" class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm" placeholder="请输入书柜号">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">库存量 <span class="text-red-500">*</span></label>
+                    <input name="stock" type="number" value="1" min="0" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm">
+                </div>
+                <div class="flex justify-end gap-2 pt-4 border-t">
+                    <button type="button" class="close-modal-btn bg-gray-200 hover:bg-gray-300 px-4 py-2 fluent-btn text-sm">
+                        <i class="fas fa-times mr-2"></i>取消
+                    </button>
+                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 fluent-btn text-sm">
+                        <i class="fas fa-plus mr-2"></i>确认添加
+                    </button>
+                </div>
             </form>`);
     });
+    
     document.querySelectorAll('.editBookBtn').forEach(btn => btn.addEventListener('click', () => {
         const book = btn.dataset;
         createModal(`
             <form action="/admin/book/update/${book.id}" method="POST" class="space-y-4">
-                <h3 class="text-lg font-medium">编辑: ${book.title}</h3>
-                <div><label class="block text-sm">书名</label><input name="title" value="${book.title}" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">出版社</label><input name="publisher" value="${book.publisher}" class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">ISBN</label><input name="isbn" value="${book.isbn}" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">图书编码</label><input name="book_code" value="${book.book_code}" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">书柜号</label><input name="bookshelf_number" value="${book.bookshelf_number}" class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">库存量</label><input name="stock" type="number" value="${book.stock}" min="0" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div class="flex justify-end gap-2"><button type="button" class="close-modal-btn bg-gray-200 px-4 py-2 fluent-btn">取消</button><button type="submit" class="bg-blue-600 text-white px-4 py-2 fluent-btn">保存更改</button></div>
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium">
+                        <i class="fas fa-edit text-blue-500 mr-2"></i>编辑: ${book.title}
+                    </h3>
+                    <button type="button" class="close-modal-btn text-gray-400 hover:text-gray-600 text-xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">书名</label>
+                    <input name="title" value="${book.title}" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">出版社</label>
+                    <input name="publisher" value="${book.publisher}" class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">ISBN</label>
+                    <input name="isbn" value="${book.isbn}" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">图书编码</label>
+                    <input name="book_code" value="${book.book_code}" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">书柜号</label>
+                    <input name="bookshelf_number" value="${book.bookshelf_number}" class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">库存量</label>
+                    <input name="stock" type="number" value="${book.stock}" min="0" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm">
+                </div>
+                <div class="flex justify-end gap-2 pt-4 border-t">
+                    <button type="button" class="close-modal-btn bg-gray-200 hover:bg-gray-300 px-4 py-2 fluent-btn text-sm">
+                        <i class="fas fa-times mr-2"></i>取消
+                    </button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 fluent-btn text-sm">
+                        <i class="fas fa-save mr-2"></i>保存更改
+                    </button>
+                </div>
             </form>`);
     }));
 
@@ -203,33 +563,107 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('addUserBtn').addEventListener('click', () => {
         createModal(`
             <form action="{{ url_for('admin_add_user') }}" method="POST" class="space-y-4">
-                <h3 class="text-lg font-medium">添加新用户</h3>
-                <div><label class="block text-sm">工号</label><input name="username" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">姓名</label><input name="full_name" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">初始密码</label><input name="password" type="password" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div class="flex justify-end gap-2"><button type="button" class="close-modal-btn bg-gray-200 px-4 py-2 fluent-btn">取消</button><button type="submit" class="bg-green-600 text-white px-4 py-2 fluent-btn">确认添加</button></div>
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium">
+                        <i class="fas fa-user-plus text-green-500 mr-2"></i>添加新用户
+                    </h3>
+                    <button type="button" class="close-modal-btn text-gray-400 hover:text-gray-600 text-xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">工号 <span class="text-red-500">*</span></label>
+                    <input name="username" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm" placeholder="请输入工号">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">姓名 <span class="text-red-500">*</span></label>
+                    <input name="full_name" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm" placeholder="请输入姓名">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">初始密码 <span class="text-red-500">*</span></label>
+                    <input name="password" type="password" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm" placeholder="请输入初始密码">
+                </div>
+                <div class="flex justify-end gap-2 pt-4 border-t">
+                    <button type="button" class="close-modal-btn bg-gray-200 hover:bg-gray-300 px-4 py-2 fluent-btn text-sm">
+                        <i class="fas fa-times mr-2"></i>取消
+                    </button>
+                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 fluent-btn text-sm">
+                        <i class="fas fa-user-plus mr-2"></i>确认添加
+                    </button>
+                </div>
             </form>`);
     });
+    
     document.querySelectorAll('.editUserBtn').forEach(btn => btn.addEventListener('click', () => {
-        const id=btn.dataset.id, username=btn.dataset.username, name=btn.dataset.name;
+        const id = btn.dataset.id;
+        const username = btn.dataset.username;
+        const name = btn.dataset.name;
         createModal(`
             <form action="/admin/user/update/${id}" method="POST" class="space-y-4">
-                <h3 class="text-lg font-medium">编辑用户: ${name}</h3>
-                <div><label class="block text-sm">工号 (不可改)</label><input value="${username}" readonly class="mt-1 w-full bg-gray-100 rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">姓名</label><input name="full_name" value="${name}" required class="mt-1 w-full rounded-md border-gray-300 shadow-sm"></div>
-                <div><label class="block text-sm">重置密码 (留空则不修改)</label><input name="password" type="password" class="mt-1 w-full rounded-md border-gray-300 shadow-sm" placeholder="输入新密码"></div>
-                <div class="flex justify-end gap-2"><button type="button" class="close-modal-btn bg-gray-200 px-4 py-2 fluent-btn">取消</button><button type="submit" class="bg-blue-600 text-white px-4 py-2 fluent-btn">保存</button></div>
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-medium">
+                        <i class="fas fa-user-edit text-blue-500 mr-2"></i>编辑用户: ${name}
+                    </h3>
+                    <button type="button" class="close-modal-btn text-gray-400 hover:text-gray-600 text-xl">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">工号 (不可改)</label>
+                    <input value="${username}" readonly class="w-full bg-gray-100 rounded-md border-gray-300 shadow-sm text-sm cursor-not-allowed">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">姓名</label>
+                    <input name="full_name" value="${name}" required class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">重置密码 (留空则不修改)</label>
+                    <input name="password" type="password" class="w-full rounded-md border-gray-300 shadow-sm focus:border-theme-primary focus:ring-theme-primary text-sm" placeholder="输入新密码">
+                </div>
+                <div class="flex justify-end gap-2 pt-4 border-t">
+                    <button type="button" class="close-modal-btn bg-gray-200 hover:bg-gray-300 px-4 py-2 fluent-btn text-sm">
+                        <i class="fas fa-times mr-2"></i>取消
+                    </button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 fluent-btn text-sm">
+                        <i class="fas fa-save mr-2"></i>保存
+                    </button>
+                </div>
             </form>`);
     }));
     
-    // Import confirm
+    // Import confirm with enhanced UX
     window.confirmImport = (form) => {
         const mode = form.querySelector('input[name="upload_mode"]:checked').value;
-        if (mode === 'overwrite') {
-            return confirm('警告：您选择了“覆盖”模式。这将删除所有现有的书籍、借阅和想读记录，然后导入新数据。此操作不可撤销，确定要继续吗？');
+        const fileInput = form.querySelector('input[type="file"]');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            alert('请先选择要上传的文件。');
+            return false;
         }
-        return true;
+        
+        if (!file.name.endsWith('.xlsx')) {
+            alert('请选择 .xlsx 格式的Excel文件。');
+            return false;
+        }
+        
+        if (mode === 'overwrite') {
+            return confirm('⚠️ 警告：您选择了"覆盖"模式。\\n\\n这将删除所有现有的书籍、借阅和想读记录，然后导入新数据。\\n\\n此操作不可撤销，确定要继续吗？\\n\\n文件名：' + file.name);
+        } else {
+            return confirm('确认导入文件：' + file.name + '\\n\\n新书籍将添加到现有书库中。');
+        }
     };
+
+    // 简化的统计显示 - 无动画
+    setTimeout(() => {
+        const counters = document.querySelectorAll('.text-lg.font-bold, .text-xl.font-bold');
+        counters.forEach(counter => {
+            const target = parseInt(counter.textContent);
+            if (!isNaN(target)) {
+                counter.textContent = target; // 直接显示最终数字，无动画
+            }
+        });
+    }, 100);
 });
 </script>
 {% endblock %}

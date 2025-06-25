@@ -29,6 +29,7 @@
                         'fade-in': 'fadeIn 0.6s ease-in-out',
                         'slide-down': 'slideDown 0.3s ease-out',
                         'bounce-subtle': 'bounceSubtle 0.6s ease-out',
+                        'pulse-slow': 'pulse 2s infinite',
                     }
                 }
             }
@@ -117,7 +118,7 @@
         }
 
         .fluent-card:hover {
-            transform: translateY(-8px) scale(1.02);
+            transform: translateY(-4px) scale(1.01);
             box-shadow: var(--shadow-large);
             border-color: rgba(255, 255, 255, 0.5);
         }
@@ -264,23 +265,72 @@
             border-top: 1px solid rgba(255, 255, 255, 0.2);
         }
 
-        /* 响应式设计增强 */
+        /* 移动端优化 */
         @media (max-width: 768px) {
             .fluent-card {
                 margin: 0 8px;
                 border-radius: 12px;
-            }
-            
-            .nav-mobile {
-                display: none;
-            }
-            
-            header nav {
                 padding: 1rem;
+            }
+            
+            .fluent-card:hover {
+                transform: translateY(-2px) scale(1.005);
             }
             
             .logo {
                 font-size: 1.25rem;
+            }
+
+            /* 移动端导航菜单 */
+            .mobile-menu {
+                background: rgba(255, 255, 255, 0.95);
+                backdrop-filter: blur(20px);
+                border-radius: 12px;
+                margin-top: 8px;
+                box-shadow: var(--shadow-medium);
+            }
+
+            .mobile-menu a {
+                transition: all 0.2s ease;
+                border-radius: 8px;
+            }
+
+            .mobile-menu a:hover {
+                background: rgba(170, 43, 48, 0.1);
+                color: #AA2B30;
+            }
+
+            /* 移动端表格优化 */
+            .table-mobile {
+                font-size: 0.875rem;
+            }
+
+            .table-mobile td {
+                padding: 0.75rem 0.5rem;
+            }
+
+            /* 移动端模态框 */
+            .modal-mobile {
+                height: 90vh;
+                margin: 5vh 1rem;
+            }
+
+            /* 移动端按钮 */
+            .btn-mobile {
+                padding: 0.5rem 0.75rem;
+                font-size: 0.75rem;
+                min-width: 60px;
+            }
+        }
+
+        /* 平板端优化 */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .fluent-card {
+                padding: 1.25rem;
+            }
+            
+            header nav {
+                padding: 1rem 1.5rem;
             }
         }
 
@@ -322,117 +372,195 @@
             backdrop-filter: blur(2px);
             border-radius: inherit;
         }
+
+        /* 搜索建议框优化 */
+        .search-suggestions {
+            max-height: 300px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        /* 响应式字体大小 */
+        @media (max-width: 640px) {
+            h1 { font-size: 1.5rem; }
+            h2 { font-size: 1.25rem; }
+            .text-xl { font-size: 1.125rem; }
+        }
+
+        /* 触摸优化 */
+        @media (hover: none) and (pointer: coarse) {
+            .fluent-btn:hover {
+                transform: none;
+            }
+            
+            .fluent-card:hover {
+                transform: none;
+            }
+            
+            .nav-link:hover {
+                transform: none;
+            }
+        }
+
+        /* 无障碍访问 */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* 高对比度模式支持 */
+        @media (prefers-contrast: high) {
+            .fluent-card {
+                border: 2px solid #000;
+                background: #fff;
+            }
+            
+            .fluent-btn {
+                border: 2px solid currentColor;
+            }
+        }
+
+        /* 深色模式支持 */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --shadow-soft: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+                --shadow-medium: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.2);
+            }
+        }
     </style>
 </head>
 <body class="antialiased text-gray-800 font-inter">
     <div id="app" class="min-h-screen flex flex-col">
         <!-- 增强的导航栏 -->
         <header class="sticky top-0 z-50">
-            <nav class="container mx-auto px-6 py-4">
+            <nav class="container mx-auto px-4 sm:px-6 py-3 sm:py-4">
                 <div class="flex justify-between items-center">
-                    <a href="{{ url_for('index') }}" class="logo text-2xl">
-                        <i class="fas fa-book-open mr-2"></i>
-                        华立外院资料室
+                    <a href="{{ url_for('index') }}" class="logo text-xl sm:text-2xl">
+                        <i class="fas fa-book-open mr-1 sm:mr-2"></i>
+                        <span class="hidden sm:inline">华立外院资料室</span>
+                        <span class="sm:hidden">华立资料室</span>
                     </a>
                     
+                    <!-- 桌面端导航 -->
                     <div class="hidden md:flex items-center space-x-2">
                         {% if current_user.is_authenticated %}
-                            <span class="user-info">
+                            <span class="user-info text-xs sm:text-sm">
                                 <i class="fas fa-user-circle mr-1"></i>
-                                {{ current_user.full_name or current_user.username }}
+                                <span class="hidden lg:inline">{{ current_user.full_name or current_user.username }}</span>
+                                <span class="lg:hidden">{{ (current_user.full_name or current_user.username)[:4] }}{{ '...' if (current_user.full_name or current_user.username)|length > 4 else '' }}</span>
                             </span>
                             
                             {% if current_user.role == 'faculty' %}
-                                <a href="{{ url_for('index') }}" class="nav-link">
+                                <a href="{{ url_for('index') }}" class="nav-link text-sm">
                                     <i class="fas fa-search"></i>
-                                    图书查询
+                                    <span class="hidden lg:inline">图书查询</span>
+                                    <span class="lg:hidden">查询</span>
                                 </a>
-                                <a href="{{ url_for('my_records') }}" class="nav-link">
+                                <a href="{{ url_for('my_records') }}" class="nav-link text-sm">
                                     <i class="fas fa-history"></i>
-                                    我的借阅
+                                    <span class="hidden lg:inline">我的借阅</span>
+                                    <span class="lg:hidden">借阅</span>
                                 </a>
-                                <a href="{{ url_for('profile') }}" class="nav-link">
+                                <a href="{{ url_for('profile') }}" class="nav-link text-sm">
                                     <i class="fas fa-key"></i>
-                                    修改密码
+                                    <span class="hidden lg:inline">修改密码</span>
+                                    <span class="lg:hidden">密码</span>
                                 </a>
                             {% elif current_user.role == 'admin' %}
-                                <a href="{{ url_for('admin_dashboard') }}" class="nav-link">
+                                <a href="{{ url_for('admin_dashboard') }}" class="nav-link text-sm">
                                     <i class="fas fa-chart-bar"></i>
-                                    管理面板
+                                    <span class="hidden lg:inline">管理面板</span>
+                                    <span class="lg:hidden">管理</span>
                                 </a>
                             {% endif %}
                             
-                            <a href="{{ url_for('logout') }}" class="bg-theme-primary text-white px-6 py-2 hover:bg-theme-primary-dark fluent-btn ml-4">
+                            <a href="{{ url_for('logout') }}" class="bg-theme-primary text-white px-3 sm:px-6 py-2 hover:bg-theme-primary-dark fluent-btn ml-2 sm:ml-4 text-sm">
                                 <i class="fas fa-sign-out-alt mr-1"></i>
-                                退出登录
+                                <span class="hidden sm:inline">退出登录</span>
+                                <span class="sm:hidden">退出</span>
                             </a>
                         {% else %}
-                            <a href="{{ url_for('login') }}" class="bg-theme-primary text-white px-6 py-2 hover:bg-theme-primary-dark fluent-btn">
+                            <a href="{{ url_for('login') }}" class="bg-theme-primary text-white px-4 sm:px-6 py-2 hover:bg-theme-primary-dark fluent-btn text-sm">
                                 <i class="fas fa-sign-in-alt mr-1"></i>
-                                登录
+                                <span class="hidden sm:inline">登录</span>
+                                <span class="sm:hidden">登录</span>
                             </a>
                         {% endif %}
                     </div>
 
                     <!-- 移动端菜单按钮 -->
-                    <button class="md:hidden p-2 rounded-lg hover:bg-gray-100" onclick="toggleMobileMenu()">
+                    <button class="md:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors" onclick="toggleMobileMenu()" aria-label="打开菜单">
                         <i class="fas fa-bars text-xl"></i>
                     </button>
                 </div>
 
                 <!-- 移动端菜单 -->
-                <div id="mobile-menu" class="md:hidden hidden mt-4 pb-4 border-t border-gray-200">
+                <div id="mobile-menu" class="md:hidden hidden mobile-menu">
                     {% if current_user.is_authenticated %}
-                        <div class="py-2">
-                            <span class="block px-4 py-2 text-sm text-gray-600">
-                                <i class="fas fa-user-circle mr-2"></i>
-                                {{ current_user.full_name or current_user.username }}
-                            </span>
+                        <div class="p-4 border-b border-gray-200">
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-user-circle mr-2 text-theme-primary"></i>
+                                <span class="font-medium">{{ current_user.full_name or current_user.username }}</span>
+                            </div>
                         </div>
                         
-                        {% if current_user.role == 'faculty' %}
-                            <a href="{{ url_for('index') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg mx-2">
-                                <i class="fas fa-search mr-2"></i>图书查询
-                            </a>
-                            <a href="{{ url_for('my_records') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg mx-2">
-                                <i class="fas fa-history mr-2"></i>我的借阅
-                            </a>
-                            <a href="{{ url_for('profile') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg mx-2">
-                                <i class="fas fa-key mr-2"></i>修改密码
-                            </a>
-                        {% elif current_user.role == 'admin' %}
-                            <a href="{{ url_for('admin_dashboard') }}" class="block px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg mx-2">
-                                <i class="fas fa-chart-bar mr-2"></i>管理面板
-                            </a>
-                        {% endif %}
+                        <div class="p-2">
+                            {% if current_user.role == 'faculty' %}
+                                <a href="{{ url_for('index') }}" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg mx-2 mb-1 transition-colors">
+                                    <i class="fas fa-search mr-3 text-theme-primary w-4"></i>图书查询
+                                </a>
+                                <a href="{{ url_for('my_records') }}" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg mx-2 mb-1 transition-colors">
+                                    <i class="fas fa-history mr-3 text-theme-primary w-4"></i>我的借阅
+                                </a>
+                                <a href="{{ url_for('profile') }}" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg mx-2 mb-1 transition-colors">
+                                    <i class="fas fa-key mr-3 text-theme-primary w-4"></i>修改密码
+                                </a>
+                            {% elif current_user.role == 'admin' %}
+                                <a href="{{ url_for('admin_dashboard') }}" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg mx-2 mb-1 transition-colors">
+                                    <i class="fas fa-chart-bar mr-3 text-theme-primary w-4"></i>管理面板
+                                </a>
+                            {% endif %}
+                        </div>
                         
-                        <a href="{{ url_for('logout') }}" class="block mx-2 mt-2 bg-theme-primary text-white px-4 py-2 rounded-lg text-center">
-                            <i class="fas fa-sign-out-alt mr-1"></i>退出登录
-                        </a>
+                        <div class="p-4 border-t border-gray-200">
+                            <a href="{{ url_for('logout') }}" class="block w-full bg-theme-primary text-white px-4 py-3 rounded-lg text-center font-medium hover:bg-theme-primary-dark transition-colors">
+                                <i class="fas fa-sign-out-alt mr-2"></i>退出登录
+                            </a>
+                        </div>
                     {% endif %}
                 </div>
             </nav>
         </header>
         
         <!-- 主内容区域 -->
-        <main class="flex-grow container mx-auto p-4 md:p-6">
+        <main class="flex-grow container mx-auto p-3 sm:p-4 md:p-6">
             <!-- 优化的消息提示 -->
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
-                    <div class="mb-6 space-y-3">
+                    <div class="mb-4 sm:mb-6 space-y-3">
                     {% for category, message in messages %}
-                        <div class="alert p-4 text-white rounded-lg shadow-lg 
+                        <div class="alert p-3 sm:p-4 text-white rounded-lg shadow-lg 
                             {{ 'bg-red-500/90 alert-error' if category == 'danger' 
                             else 'bg-blue-500/90 alert-info' if category == 'info' 
                             else 'bg-green-500/90 alert-success' if category == 'success' 
                             else 'bg-yellow-500/90 alert-warning' }}" 
                             role="alert">
-                            <div class="flex items-center">
+                            <div class="flex items-start">
                                 <i class="fas {{ 'fa-exclamation-triangle' if category == 'danger' 
                                     else 'fa-info-circle' if category == 'info' 
                                     else 'fa-check-circle' if category == 'success' 
-                                    else 'fa-exclamation-circle' }} mr-3"></i>
-                                <span>{{ message }}</span>
+                                    else 'fa-exclamation-circle' }} mr-2 sm:mr-3 mt-0.5 flex-shrink-0"></i>
+                                <span class="text-sm sm:text-base">{{ message }}</span>
+                                <button class="ml-auto flex-shrink-0 text-white/80 hover:text-white" onclick="this.parentElement.parentElement.remove()" aria-label="关闭">
+                                    <i class="fas fa-times"></i>
+                                </button>
                             </div>
                         </div>
                     {% endfor %}
@@ -444,15 +572,18 @@
         </main>
 
         <!-- 优化的页脚 -->
-        <footer class="mt-12 py-6">
-            <div class="container mx-auto px-6">
+        <footer class="mt-8 sm:mt-12 py-4 sm:py-6">
+            <div class="container mx-auto px-4 sm:px-6">
                 <div class="text-center text-gray-600">
-                    <div class="flex justify-center items-center space-x-4 mb-2">
-                        <i class="fas fa-university"></i>
-                        <span class="font-medium">华立学院外国语学院</span>
+                    <div class="flex flex-col sm:flex-row justify-center items-center space-y-2 sm:space-y-0 sm:space-x-4 mb-2">
+                        <div class="flex items-center">
+                            <i class="fas fa-university mr-2"></i>
+                            <span class="font-medium text-sm sm:text-base">华立学院外国语学院</span>
+                        </div>
+                        <span class="hidden sm:inline text-gray-400">|</span>
+                        <p class="text-xs sm:text-sm">&copy; {{ current_year }} 梁诗忻. All Rights Reserved.</p>
                     </div>
-                    <p class="text-sm">&copy; {{ current_year }} 梁诗忻. All Rights Reserved.</p>
-                    <p class="text-xs mt-1 opacity-75">
+                    <p class="text-xs opacity-75">
                         <i class="fas fa-code mr-1"></i>
                         Powered by Flask & AI
                     </p>
@@ -466,18 +597,66 @@
         // 移动端菜单切换
         function toggleMobileMenu() {
             const menu = document.getElementById('mobile-menu');
-            menu.classList.toggle('hidden');
+            const isHidden = menu.classList.contains('hidden');
+            
+            if (isHidden) {
+                menu.classList.remove('hidden');
+                menu.style.maxHeight = '0';
+                menu.style.overflow = 'hidden';
+                
+                // 动画显示
+                requestAnimationFrame(() => {
+                    menu.style.transition = 'max-height 0.3s ease-out';
+                    menu.style.maxHeight = menu.scrollHeight + 'px';
+                });
+                
+                // 添加点击外部关闭功能
+                setTimeout(() => {
+                    document.addEventListener('click', closeMenuOnClickOutside);
+                }, 100);
+            } else {
+                menu.style.maxHeight = '0';
+                setTimeout(() => {
+                    menu.classList.add('hidden');
+                    menu.style.maxHeight = '';
+                    menu.style.transition = '';
+                    menu.style.overflow = '';
+                }, 300);
+                
+                document.removeEventListener('click', closeMenuOnClickOutside);
+            }
+        }
+
+        function closeMenuOnClickOutside(event) {
+            const menu = document.getElementById('mobile-menu');
+            const menuButton = event.target.closest('button[onclick="toggleMobileMenu()"]');
+            
+            if (!menu.contains(event.target) && !menuButton) {
+                toggleMobileMenu();
+            }
         }
 
         // 自动隐藏消息提示
         document.addEventListener('DOMContentLoaded', function() {
             const alerts = document.querySelectorAll('.alert');
             alerts.forEach(alert => {
-                setTimeout(() => {
-                    alert.style.opacity = '0';
-                    alert.style.transform = 'translateY(-10px)';
-                    setTimeout(() => alert.remove(), 300);
-                }, 5000);
+                // 自动隐藏成功消息
+                if (alert.classList.contains('alert-success')) {
+                    setTimeout(() => {
+                        alert.style.opacity = '0';
+                        alert.style.transform = 'translateY(-10px)';
+                        setTimeout(() => alert.remove(), 300);
+                    }, 4000);
+                }
+                
+                // 自动隐藏信息消息
+                if (alert.classList.contains('alert-info')) {
+                    setTimeout(() => {
+                        alert.style.opacity = '0';
+                        alert.style.transform = 'translateY(-10px)';
+                        setTimeout(() => alert.remove(), 300);
+                    }, 6000);
+                }
             });
 
             // 添加平滑滚动
@@ -486,7 +665,10 @@
                     e.preventDefault();
                     const target = document.querySelector(this.getAttribute('href'));
                     if (target) {
-                        target.scrollIntoView({ behavior: 'smooth' });
+                        target.scrollIntoView({ 
+                            behavior: 'smooth',
+                            block: 'start'
+                        });
                     }
                 });
             });
@@ -497,6 +679,32 @@
                 document.body.style.transition = 'opacity 0.5s ease-in-out';
                 document.body.style.opacity = '1';
             });
+
+            // 触摸设备优化
+            if ('ontouchstart' in window) {
+                document.body.classList.add('touch-device');
+            }
+
+            // 网络状态监听
+            if ('navigator' in window && 'onLine' in navigator) {
+                function updateNetworkStatus() {
+                    if (!navigator.onLine) {
+                        const offlineAlert = document.createElement('div');
+                        offlineAlert.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50 text-sm';
+                        offlineAlert.innerHTML = '<i class="fas fa-wifi mr-2"></i>网络连接已断开';
+                        offlineAlert.id = 'offline-alert';
+                        document.body.appendChild(offlineAlert);
+                    } else {
+                        const offlineAlert = document.getElementById('offline-alert');
+                        if (offlineAlert) {
+                            offlineAlert.remove();
+                        }
+                    }
+                }
+
+                window.addEventListener('online', updateNetworkStatus);
+                window.addEventListener('offline', updateNetworkStatus);
+            }
         });
 
         // 全局加载状态管理
@@ -513,8 +721,50 @@
             const mobileMenu = document.getElementById('mobile-menu');
             if (window.innerWidth >= 768) {
                 mobileMenu.classList.add('hidden');
+                mobileMenu.style.maxHeight = '';
+                mobileMenu.style.transition = '';
+                mobileMenu.style.overflow = '';
+                document.removeEventListener('click', closeMenuOnClickOutside);
             }
         });
+
+        // 防抖函数
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // 节流函数
+        function throttle(func, limit) {
+            let inThrottle;
+            return function() {
+                const args = arguments;
+                const context = this;
+                if (!inThrottle) {
+                    func.apply(context, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            }
+        }
+
+        // 页面性能监控
+        if ('performance' in window) {
+            window.addEventListener('load', () => {
+                const navigationTiming = performance.getEntriesByType('navigation')[0];
+                if (navigationTiming) {
+                    const loadTime = navigationTiming.loadEventEnd - navigationTiming.fetchStart;
+                    console.log(`页面加载时间: ${loadTime}ms`);
+                }
+            });
+        }
     </script>
 </body>
 </html>
