@@ -60,7 +60,7 @@
                 <tr>
                     <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">书名</th>
                     <th class="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">书柜号</th>
-                    <th class="px-3 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">图书编码</th>
+                    <th class="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">图书编码</th>
                     <th class="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">库存状态</th>
                     <th class="px-3 sm:px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">操作</th>
                     <th class="hidden sm:table-cell px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">AI问答</th>
@@ -70,11 +70,27 @@
                 {% for book in books_pagination.items %}
                 <tr class="hover:bg-gray-50/70 dark:hover:bg-gray-700/70 transition-colors">
                     <td class="px-3 sm:px-6 py-4">
-                        <div class="font-medium text-gray-900 dark:text-gray-100">{{ book.title }}</div>
-                        <div class="sm:hidden text-xs text-gray-500 dark:text-gray-400 mt-1">{{ book.bookshelf_number }}</div>
+                        <div class="flex items-start justify-between">
+                            <div class="flex-grow">
+                                <div class="font-medium text-gray-900 dark:text-gray-100">{{ book.title }}</div>
+                                <div class="sm:hidden text-xs text-gray-500 dark:text-gray-400 mt-1 space-x-3">
+                                    <span>{{ book.bookshelf_number }}</span>
+                                    <span>{{ book.book_code }}</span>
+                                </div>
+                            </div>
+                            <!-- 移动端AI按钮 - 紧凑设计 -->
+                            <button class="ask-ai-details-btn sm:hidden ml-2 flex-shrink-0 p-2 rounded-lg hover:bg-sky-50 dark:hover:bg-sky-900/30 transition-colors border border-sky-200 dark:border-sky-700" 
+                                    data-book-title="{{ book.title }}" 
+                                    data-book-isbn="{{ book.isbn }}" 
+                                    title="询问AI获取书籍梗概">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-sky-500 dark:text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                            </button>
+                        </div>
                     </td>
                     <td class="hidden sm:table-cell px-6 py-4 text-gray-500 dark:text-gray-400">{{ book.bookshelf_number }}</td>
-                    <td class="px-3 sm:px-6 py-4 text-gray-500 dark:text-gray-400">{{ book.book_code }}</td>
+                    <td class="hidden sm:table-cell px-6 py-4 text-gray-500 dark:text-gray-400">{{ book.book_code }}</td>
                     <td class="px-3 sm:px-6 py-4 text-center">
                         {% if book.quantity_available > 0 %}
                             <span class="px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
@@ -87,26 +103,49 @@
                         {% endif %}
                     </td>
                     <td class="px-3 sm:px-6 py-4 text-center">
-                        <div class="flex flex-col sm:flex-row gap-1 sm:gap-2 justify-center">
+                        <div class="flex flex-col sm:flex-row gap-1 sm:gap-2 justify-center items-center">
+                            <!-- 主要操作按钮 -->
                             {% if book.quantity_available > 0 %}
                                 {% if not current_user.records | selectattr('book_id', 'equalto', book.id) | selectattr('status', 'equalto', 'borrowed') | list %}
                                 <form method="POST" action="{{ url_for('borrow_book', book_id=book.id) }}" class="inline">
-                                    <button type="submit" class="text-white bg-theme-primary hover:bg-theme-primary-dark px-2 sm:px-3 py-1 fluent-btn text-xs sm:text-sm">借阅</button>
+                                    <!-- 移动端：图标按钮，桌面端：文字按钮 -->
+                                    <button type="submit" class="text-white bg-theme-primary hover:bg-theme-primary-dark fluent-btn sm:px-4 sm:py-2 px-3 py-2 text-sm flex items-center justify-center" title="借阅图书">
+                                        <span class="sm:hidden">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                            </svg>
+                                        </span>
+                                        <span class="hidden sm:inline">借阅</span>
+                                    </button>
                                 </form>
                                 {% else %}
-                                <span class="text-gray-400 dark:text-gray-500 text-xs sm:text-sm">已借阅</span>
+                                <span class="text-gray-400 dark:text-gray-500 text-sm px-3 py-2">
+                                    <span class="sm:hidden">已借</span>
+                                    <span class="hidden sm:inline">已借阅</span>
+                                </span>
                                 {% endif %}
                             {% else %}
                                 {% if not current_user.has_wanted(book) %}
                                 <form method="POST" action="{{ url_for('want_book', book_id=book.id) }}" class="inline">
-                                    <button type="submit" class="text-white bg-sky-500 hover:bg-sky-600 px-2 sm:px-3 py-1 fluent-btn text-xs sm:text-sm">想要</button>
+                                    <button type="submit" class="text-white bg-sky-500 hover:bg-sky-600 fluent-btn sm:px-4 sm:py-2 px-3 py-2 text-sm flex items-center justify-center" title="想要此书">
+                                        <span class="sm:hidden">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                                            </svg>
+                                        </span>
+                                        <span class="hidden sm:inline">想要</span>
+                                    </button>
                                 </form>
                                 {% else %}
-                                <span class="text-gray-400 dark:text-gray-500 text-xs sm:text-sm">已想要</span>
+                                <span class="text-gray-400 dark:text-gray-500 text-sm px-3 py-2">
+                                    <span class="sm:hidden">已想要</span>
+                                    <span class="hidden sm:inline">已想要</span>
+                                </span>
                                 {% endif %}
                             {% endif %}
                         </div>
                     </td>
+                    <!-- 桌面端AI按钮保持原样 -->
                     <td class="hidden sm:table-cell px-6 py-4 text-center">
                          <button class="ask-ai-details-btn" data-book-title="{{ book.title }}" data-book-isbn="{{ book.isbn }}" title="询问AI获取书籍梗概">
                              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-sky-500 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
@@ -134,10 +173,10 @@
 
 <!-- AI Book Details Modal -->
 <div id="ai-details-modal" class="fixed inset-0 bg-black bg-opacity-60 dark:bg-black dark:bg-opacity-80 z-50 hidden items-center justify-center p-4">
-    <div class="fluent-card w-full max-w-2xl mx-auto flex flex-col" style="height: 80vh;">
+    <div class="fluent-card w-full max-w-2xl mx-auto flex flex-col modal-mobile" style="height: 80vh;">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200"><span class="text-sky-500 dark:text-sky-400">AI</span> 图书管理员</h2>
-            <button class="close-modal-btn text-2xl hover:text-gray-600 dark:hover:text-gray-400 text-gray-500 dark:text-gray-400">&times;</button>
+            <button class="close-modal-btn text-2xl hover:text-gray-600 dark:hover:text-gray-400 text-gray-500 dark:text-gray-400 p-1">&times;</button>
         </div>
         <div class="chat-log flex-grow space-y-4 overflow-y-auto p-4 bg-gray-50/80 dark:bg-gray-800/80 rounded-lg"></div>
         <div class="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600 flex gap-2">
@@ -149,10 +188,10 @@
 
 <!-- AI Search Modal -->
 <div id="ai-search-modal" class="fixed inset-0 bg-black bg-opacity-60 dark:bg-black dark:bg-opacity-80 z-50 hidden items-center justify-center p-4">
-    <div class="fluent-card w-full max-w-2xl mx-auto flex flex-col" style="height: 80vh;">
+    <div class="fluent-card w-full max-w-2xl mx-auto flex flex-col modal-mobile" style="height: 80vh;">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-bold text-gray-800 dark:text-gray-200">AI 智能搜书</h2>
-            <button class="close-modal-btn text-2xl hover:text-gray-600 dark:hover:text-gray-400 text-gray-500 dark:text-gray-400">&times;</button>
+            <button class="close-modal-btn text-2xl hover:text-gray-600 dark:hover:text-gray-400 text-gray-500 dark:text-gray-400 p-1">&times;</button>
         </div>
         <div class="chat-log flex-grow space-y-4 overflow-y-auto p-4 bg-gray-50/80 dark:bg-gray-800/80 rounded-lg">
             <div class="w-full flex justify-start">
@@ -479,9 +518,13 @@ document.addEventListener('DOMContentLoaded', () => {
         sendBtn.addEventListener('click', handleSend);
         userInput.addEventListener('keypress', (e) => e.key === 'Enter' && handleSend());
         
+        // 统一的AI按钮点击处理 - 支持移动端和桌面端
         document.body.addEventListener('click', (e) => {
             const btn = e.target.closest('.ask-ai-details-btn');
             if (btn) {
+                e.preventDefault();
+                e.stopPropagation();
+                
                 modal.classList.remove('hidden');
                 modal.classList.add('flex');
                 chatLog.innerHTML = '';
@@ -501,6 +544,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentAudioSource.stop(); 
                 currentAudioSource = null; 
                 globalPlayingButton = null; 
+            }
+        });
+
+        // 模态框外部点击关闭
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeBtn.click();
             }
         });
     };
@@ -658,6 +708,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 globalPlayingButton = null; 
             }
         });
+
+        // 模态框外部点击关闭
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeBtn.click();
+            }
+        });
     };
     
     // --- Initialize both modals ---
@@ -696,6 +753,282 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // --- 移动端优化：防止意外触发 ---
+    if (window.innerWidth <= 768) {
+        // 移动端滚动时不触发hover效果
+        let isScrolling = false;
+        let scrollTimeout;
+        
+        document.addEventListener('scroll', () => {
+            isScrolling = true;
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                isScrolling = false;
+            }, 150);
+        });
+
+        // 为移动端AI按钮添加触觉反馈
+        document.querySelectorAll('.ask-ai-details-btn').forEach(btn => {
+            btn.addEventListener('touchstart', () => {
+                if (navigator.vibrate) {
+                    navigator.vibrate(50); // 轻微震动反馈
+                }
+            });
+        });
+    }
+
+    // --- 键盘导航支持 ---
+    document.addEventListener('keydown', (e) => {
+        // ESC 键关闭模态框
+        if (e.key === 'Escape') {
+            const activeModal = document.querySelector('.fixed:not(.hidden)');
+            if (activeModal) {
+                const closeBtn = activeModal.querySelector('.close-modal-btn');
+                if (closeBtn) closeBtn.click();
+            }
+        }
+    });
 });
 </script>
+
+<style>
+/* 额外的移动端优化样式 */
+@media (max-width: 640px) {
+    /* 移动端模态框全屏显示 */
+    .modal-mobile {
+        height: 95vh !important;
+        margin: 2.5vh 0.5rem;
+        max-width: none;
+    }
+    
+    /* 移动端AI按钮优化 - 更好的视觉效果和触摸体验 */
+    .ask-ai-details-btn {
+        min-width: 36px;
+        min-height: 36px;
+        touch-action: manipulation;
+        background: rgba(14, 165, 233, 0.05);
+        border: 1px solid rgba(14, 165, 233, 0.2);
+    }
+    
+    /* 夜间模式下的AI按钮 */
+    .dark .ask-ai-details-btn {
+        background: rgba(56, 189, 248, 0.1);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    
+    .ask-ai-details-btn:hover {
+        background: rgba(14, 165, 233, 0.1);
+        border-color: rgba(14, 165, 233, 0.3);
+        transform: scale(1.02);
+    }
+    
+    /* 夜间模式悬停效果 */
+    .dark .ask-ai-details-btn:hover {
+        background: rgba(56, 189, 248, 0.2);
+        border-color: rgba(56, 189, 248, 0.4);
+    }
+    
+    .ask-ai-details-btn:active {
+        transform: scale(0.98);
+        background: rgba(14, 165, 233, 0.15);
+    }
+    
+    .dark .ask-ai-details-btn:active {
+        background: rgba(56, 189, 248, 0.25);
+    }
+    
+    /* 移动端书籍信息第二行优化 */
+    .text-xs.space-x-3 span {
+        background: rgba(107, 114, 128, 0.1);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-weight: 500;
+        color: rgb(107, 114, 128);
+    }
+    
+    /* 夜间模式下的信息标签 */
+    .dark .text-xs.space-x-3 span {
+        background: rgba(156, 163, 175, 0.15);
+        color: rgb(156, 163, 175);
+    }
+    
+    /* 防止双击缩放 */
+    .ask-ai-details-btn, .fluent-btn {
+        touch-action: manipulation;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    
+    /* 移动端表格优化 */
+    .table-mobile td {
+        vertical-align: top;
+    }
+    
+    /* 移动端按钮尺寸优化 */
+    .fluent-btn {
+        min-height: 40px;
+        padding: 8px 16px;
+    }
+    
+    /* 改善移动端间距 */
+    .px-3 {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    /* 移动端操作按钮图标优化 */
+    .fluent-btn svg {
+        stroke-width: 2.5;
+    }
+}
+
+/* 夜间模式全局优化 */
+@media (prefers-color-scheme: dark) {
+    /* 改善深色模式下的卡片对比度 */
+    .fluent-card {
+        background: rgba(31, 41, 55, 0.9);
+        border: 1px solid rgba(75, 85, 99, 0.3);
+    }
+    
+    /* 深色模式下的表格行 */
+    .bg-white\/50 {
+        background: rgba(31, 41, 55, 0.5) !important;
+    }
+    
+    /* 深色模式下的表头 */
+    .bg-gray-50\/50 {
+        background: rgba(17, 24, 39, 0.7) !important;
+    }
+    
+    /* 深色模式下的悬停效果 */
+    .hover\:bg-gray-50\/70:hover {
+        background: rgba(55, 65, 81, 0.7) !important;
+    }
+    
+    /* 深色模式下的状态标签 */
+    .bg-green-100 {
+        background: rgba(6, 78, 59, 0.8) !important;
+    }
+    
+    .bg-yellow-100 {
+        background: rgba(92, 77, 19, 0.8) !important;
+    }
+    
+    /* 深色模式下的分割线 */
+    .divide-gray-200 > * + * {
+        border-color: rgb(55, 65, 81) !important;
+    }
+}
+
+/* 强制深色模式类优化 */
+.dark {
+    /* 改善文字对比度 */
+    color: rgb(243, 244, 246);
+}
+
+.dark .fluent-card {
+    background: rgba(31, 41, 55, 0.95);
+    border: 1px solid rgba(75, 85, 99, 0.4);
+    backdrop-filter: blur(20px) saturate(180%);
+}
+
+.dark .bg-white\/50 {
+    background: rgba(31, 41, 55, 0.6) !important;
+}
+
+.dark .bg-gray-50\/50 {
+    background: rgba(17, 24, 39, 0.8) !important;
+}
+
+.dark .hover\:bg-gray-50\/70:hover {
+    background: rgba(55, 65, 81, 0.8) !important;
+}
+
+/* 深色模式下的搜索建议框 */
+.dark #search-suggestions {
+    background: rgb(55, 65, 81);
+    border-color: rgb(75, 85, 99);
+}
+
+.dark .suggestion-item:hover {
+    background: rgb(75, 85, 99) !important;
+}
+
+/* 深色模式下的模态框 */
+.dark .modal-mobile {
+    background: rgba(31, 41, 55, 0.98);
+    border: 1px solid rgba(75, 85, 99, 0.5);
+}
+
+/* 深色模式下的聊天区域 */
+.dark .chat-log {
+    background: rgba(17, 24, 39, 0.9) !important;
+}
+
+/* 深色模式下的状态标签增强 */
+.dark .bg-green-100 {
+    background: rgba(6, 78, 59, 0.9) !important;
+    color: rgb(167, 243, 208) !important;
+}
+
+.dark .text-green-800 {
+    color: rgb(167, 243, 208) !important;
+}
+
+.dark .bg-yellow-100 {
+    background: rgba(92, 77, 19, 0.9) !important;
+    color: rgb(254, 240, 138) !important;
+}
+
+.dark .text-yellow-800 {
+    color: rgb(254, 240, 138) !important;
+}
+
+/* 高对比度模式适配 */
+@media (prefers-contrast: high) {
+    .ask-ai-details-btn {
+        border: 1px solid currentColor;
+    }
+}
+
+/* 深色模式下的AI按钮优化 */
+@media (prefers-color-scheme: dark) {
+    .ask-ai-details-btn:hover {
+        background-color: rgba(14, 165, 233, 0.2);
+    }
+}
+
+/* 无障碍访问增强 */
+.ask-ai-details-btn:focus {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
+
+/* 加载状态指示器 */
+.ask-ai-details-btn.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.ask-ai-details-btn.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    border: 2px solid transparent;
+    border-top: 2px solid currentColor;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+</style>
 {% endblock %}
