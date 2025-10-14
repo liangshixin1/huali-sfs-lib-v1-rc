@@ -118,7 +118,18 @@
                                    <i class="fas fa-upload mr-2"></i>上传导入
                                </button>
                            </form>
-                           
+
+                           <form action="{{ url_for('admin_import_users') }}" method="post" enctype="multipart/form-data" class="space-y-2 p-3 sm:p-4 border rounded-lg bg-gray-50/50">
+                               <label class="text-sm font-medium text-gray-700 flex items-center">
+                                   <i class="fas fa-user-plus text-theme-primary mr-2"></i>批量导入教职工账号 (.xlsx)
+                               </label>
+                               <input type="file" name="user_file" accept=".xlsx" required class="block w-full text-xs sm:text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-semibold file:bg-theme-primary file:text-white hover:file:bg-theme-primary-dark cursor-pointer">
+                               <p class="text-xs sm:text-sm text-gray-500 leading-relaxed">文件需包含「工号」「教职工姓名」以及「初始密码」或「身份证后四位」列，系统会自动跳过已存在的账号。</p>
+                               <button type="submit" class="w-full bg-theme-primary text-white px-3 sm:px-4 py-2 hover:bg-theme-primary-dark fluent-btn text-sm sm:text-base">
+                                   <i class="fas fa-file-import mr-2"></i>导入新用户
+                               </button>
+                           </form>
+
                            <form action="{{ url_for('admin_return_book') }}" method="post" class="space-y-2 p-3 sm:p-4 border rounded-lg bg-gray-50/50">
                                <label class="text-sm font-medium text-gray-700 flex items-center">
                                    <i class="fas fa-undo text-theme-primary mr-2"></i>手动还书
