@@ -31,6 +31,57 @@
 <div id="search-suggestions" class="fixed bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto hidden" style="z-index: 9999;">
 </div>
 
+{% if current_user.role == 'faculty' %}
+<!-- 移动扫码借还 -->
+<div class="fluent-card mb-6" id="mobile-scan-card">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-gray-200">移动扫码借还</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">使用手机摄像头快速完成图书借阅或归还，无需手动输入图书编码。</p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <button type="button" data-scan-mode="borrow" class="w-full sm:w-auto bg-theme-primary text-white px-4 py-2 rounded-lg shadow-sm hover:bg-theme-primary-dark transition-colors flex items-center justify-center gap-2">
+                <i class="fas fa-qrcode"></i>
+                <span>扫码借书</span>
+            </button>
+            <button type="button" data-scan-mode="return" class="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-lg shadow-sm hover:bg-green-700 transition-colors flex items-center justify-center gap-2">
+                <i class="fas fa-undo"></i>
+                <span>扫码还书</span>
+            </button>
+        </div>
+    </div>
+    <p class="text-xs text-gray-500 dark:text-gray-500 mt-2">提示：请在信任的网络环境下使用扫码功能，首次使用时需要授予摄像头权限。</p>
+</div>
+
+<!-- 扫码弹窗 -->
+<div id="scan-modal" class="fixed inset-0 hidden items-center justify-center z-50 px-4">
+    <div class="absolute inset-0 bg-black/60" data-close-modal="true"></div>
+    <div class="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md p-4 sm:p-6">
+        <div class="flex items-center justify-between">
+            <h3 id="scan-modal-title" class="text-lg font-semibold text-gray-800 dark:text-gray-100">扫码借书</h3>
+            <button id="scan-modal-close" type="button" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300" aria-label="关闭扫码弹窗">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="mt-4 space-y-4">
+            <div id="secure-context-warning" class="hidden text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"></div>
+            <div class="rounded-xl overflow-hidden bg-black/90">
+                <video id="scan-video" class="w-full h-64 object-cover bg-black" playsinline muted></video>
+            </div>
+            <p id="scan-status" class="text-sm text-gray-600 dark:text-gray-300"></p>
+            <button id="restart-scan" type="button" class="hidden w-full bg-theme-primary text-white px-4 py-2 rounded-lg hover:bg-theme-primary-dark transition-colors">重新扫码</button>
+            <div id="manual-entry" class="hidden space-y-2">
+                <label for="manual-code" class="text-sm font-medium text-gray-700 dark:text-gray-200">无法扫码？手动输入图书编码完成<span id="scan-action-label" class="font-semibold text-theme-primary ml-1">借书</span></label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input id="manual-code" type="text" inputmode="numeric" autocomplete="off" class="flex-grow px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/50 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" placeholder="输入图书编码...">
+                    <button id="manual-submit" type="button" class="sm:w-auto bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">提交</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- 查询结果 - 现代化Bento Grid布局 -->
 <div class="fluent-card">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
@@ -1683,4 +1734,229 @@ document.addEventListener('DOMContentLoaded', () => {
     hideLoading();
 });
 </script>
+{% endblock %}
+
+{% block extra_scripts %}
+{{ super() }}
+{% if current_user.role == 'faculty' %}
+<script>
+(function() {
+    const scanModal = document.getElementById('scan-modal');
+    if (!scanModal) {
+        return;
+    }
+
+    const video = document.getElementById('scan-video');
+    const statusEl = document.getElementById('scan-status');
+    const secureWarning = document.getElementById('secure-context-warning');
+    const manualEntry = document.getElementById('manual-entry');
+    const manualInput = document.getElementById('manual-code');
+    const manualSubmit = document.getElementById('manual-submit');
+    const restartBtn = document.getElementById('restart-scan');
+    const modalTitle = document.getElementById('scan-modal-title');
+    const actionLabel = document.getElementById('scan-action-label');
+
+    const modeText = { borrow: '借书', return: '还书' };
+    const endpoints = {
+        borrow: code => `/borrow-by-code/${encodeURIComponent(code)}`,
+        return: code => `/return-by-code/${encodeURIComponent(code)}`
+    };
+
+    let currentMode = 'borrow';
+    let stream = null;
+    let detectionTimer = null;
+    let detector = null;
+    let isProcessing = false;
+
+    function setStatus(message, type = 'info') {
+        const baseClass = 'text-sm mt-3';
+        let colorClass = 'text-gray-600';
+        if (type === 'success') colorClass = 'text-green-600';
+        if (type === 'error') colorClass = 'text-red-600';
+        statusEl.className = `${baseClass} ${colorClass}`.trim();
+        statusEl.textContent = message || '';
+    }
+
+    function prepareManualEntry() {
+        manualEntry.classList.remove('hidden');
+        restartBtn.classList.add('hidden');
+        stopScanner();
+    }
+
+    async function startScanner() {
+        setStatus('摄像头初始化中，请稍候...', 'info');
+        manualEntry.classList.add('hidden');
+        restartBtn.classList.add('hidden');
+        secureWarning.classList.add('hidden');
+        isProcessing = false;
+
+        if (!window.isSecureContext) {
+            secureWarning.classList.remove('hidden');
+            secureWarning.textContent = '为保护您的隐私，请在 HTTPS 环境下使用扫码功能。您仍可通过下方输入框手动录入图书编码。';
+            prepareManualEntry();
+            return;
+        }
+
+        if (!('mediaDevices' in navigator) || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+            setStatus('当前浏览器不支持摄像头调用，请使用下方输入框手动录入图书编码。', 'error');
+            prepareManualEntry();
+            return;
+        }
+
+        if (!('BarcodeDetector' in window)) {
+            setStatus('检测到浏览器暂不支持原生扫码功能，请使用下方输入框手动录入图书编码。', 'error');
+            prepareManualEntry();
+            return;
+        }
+
+        try {
+            detector = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'code_39', 'ean_13'] });
+        } catch (detectorError) {
+            console.error('初始化识别器失败', detectorError);
+            setStatus('初始化扫码识别器失败，请使用下方输入框手动录入。', 'error');
+            prepareManualEntry();
+            return;
+        }
+
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { ideal: 'environment' } },
+                audio: false
+            });
+            video.srcObject = stream;
+            await video.play();
+            setStatus('请将图码对准取景框以完成扫码。');
+
+            detectionTimer = window.setInterval(async () => {
+                if (isProcessing || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+                    return;
+                }
+
+                try {
+                    const barcodes = await detector.detect(video);
+                    if (!barcodes.length) {
+                        return;
+                    }
+
+                    const value = (barcodes[0].rawValue || '').trim();
+                    if (!value) {
+                        return;
+                    }
+
+                    isProcessing = true;
+                    await handleScannedCode(value);
+                } catch (detectError) {
+                    console.error('扫码识别失败', detectError);
+                }
+            }, 700);
+        } catch (cameraError) {
+            console.error('摄像头访问失败', cameraError);
+            setStatus(`无法访问摄像头：${cameraError.message || cameraError}`, 'error');
+            prepareManualEntry();
+        }
+    }
+
+    function stopScanner() {
+        if (detectionTimer) {
+            window.clearInterval(detectionTimer);
+            detectionTimer = null;
+        }
+        if (video) {
+            video.pause();
+            video.srcObject = null;
+        }
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            stream = null;
+        }
+        isProcessing = false;
+    }
+
+    async function handleScannedCode(code) {
+        setStatus('正在提交，请稍候...', 'info');
+        try {
+            const response = await fetch(endpoints[currentMode](code), {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            });
+            const data = await response.json();
+
+            if (response.ok && data && data.success) {
+                setStatus(data.message || '操作成功。', 'success');
+                restartBtn.classList.remove('hidden');
+                stopScanner();
+            } else {
+                const message = data && data.message ? data.message : '操作失败，请重试。';
+                setStatus(message, 'error');
+                isProcessing = false;
+            }
+        } catch (networkError) {
+            console.error('提交失败', networkError);
+            setStatus('提交失败，请检查网络连接后重试。', 'error');
+            isProcessing = false;
+        }
+    }
+
+    function openModal(mode) {
+        currentMode = mode;
+        modalTitle.textContent = `${modeText[mode]}扫码`;
+        actionLabel.textContent = modeText[mode];
+        manualInput.value = '';
+        setStatus('');
+        scanModal.classList.remove('hidden');
+        scanModal.classList.add('flex');
+        startScanner();
+    }
+
+    function closeModal() {
+        stopScanner();
+        scanModal.classList.add('hidden');
+        scanModal.classList.remove('flex');
+        secureWarning.classList.add('hidden');
+        manualEntry.classList.add('hidden');
+        manualInput.value = '';
+        restartBtn.classList.add('hidden');
+        setStatus('');
+    }
+
+    document.querySelectorAll('[data-scan-mode]').forEach(button => {
+        button.addEventListener('click', () => openModal(button.getAttribute('data-scan-mode')));
+    });
+
+    document.getElementById('scan-modal-close').addEventListener('click', closeModal);
+
+    scanModal.addEventListener('click', event => {
+        if (event.target.dataset.closeModal === 'true') {
+            closeModal();
+        }
+    });
+
+    restartBtn.addEventListener('click', () => {
+        stopScanner();
+        isProcessing = false;
+        startScanner();
+    });
+
+    manualSubmit.addEventListener('click', async () => {
+        const code = manualInput.value.trim();
+        if (!code) {
+            setStatus('请先输入图书编码。', 'error');
+            return;
+        }
+        isProcessing = true;
+        await handleScannedCode(code);
+    });
+
+    manualInput.addEventListener('keydown', event => {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            manualSubmit.click();
+        }
+    });
+
+    window.addEventListener('pagehide', stopScanner);
+})();
+</script>
+{% endif %}
 {% endblock %}

@@ -8,6 +8,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, abo
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from sqlalchemy import or_, func, desc, asc
 from datetime import datetime, timedelta, date
 from openai import OpenAI
@@ -27,6 +28,12 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'a_default_fallback_secret_key')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'instance', 'library.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['REMEMBER_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
+app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 10 * 1024 * 1024))
+app.config['ALLOWED_EXCEL_EXTENSIONS'] = {'xlsx'}
 
 # --- AI & Speech API 配置 ---
 AI_DETAILS_API_KEY = os.getenv("AI_DETAILS_API_KEY")
@@ -43,12 +50,57 @@ BAIDU_SECRET_KEY = os.getenv("BAIDU_SPEECH_SECRET_KEY")
 vectorizer, book_vectors, book_corpus_data = None, None, []
 baidu_token_cache = {'token': None, 'expires_at': 0}
 
+
+def is_allowed_excel_file(file_storage):
+    """Validate uploaded Excel files using both extension and mimetype checks."""
+    if not file_storage or not file_storage.filename:
+        return False
+
+    filename = secure_filename(file_storage.filename)
+    if '.' not in filename:
+        return False
+
+    extension = filename.rsplit('.', 1)[1].lower()
+    if extension not in app.config['ALLOWED_EXCEL_EXTENSIONS']:
+        return False
+
+    mimetype = (file_storage.mimetype or '').lower()
+    if mimetype and all(token not in mimetype for token in ['sheet', 'excel']) and mimetype != 'application/octet-stream':
+        return False
+
+    return True
+
 # --- 数据库和登录管理器初始化 ---
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 login_manager.login_message = '请先登录以访问此页面。'
 login_manager.login_message_category = 'info'
+
+
+@app.after_request
+def apply_security_headers(response):
+    response.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
+    response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
+    response.headers.setdefault('Permissions-Policy', 'camera=(self), microphone=(), geolocation=()')
+
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; "
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'self'"
+    )
+    response.headers.setdefault('Content-Security-Policy', csp)
+
+    if request.is_secure:
+        response.headers.setdefault('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+
+    return response
+
 
 @app.context_processor
 def inject_current_year(): return {'current_year': datetime.utcnow().year}
@@ -272,6 +324,34 @@ def borrow_by_code(book_code):
     db.session.add(BorrowRecord(user_id=current_user.id, book_id=book.id))
     db.session.commit()
     return jsonify({'success': True, 'message': f'成功借阅《{book.title}》'})
+
+
+@app.route('/return-by-code/<string:book_code>', methods=['POST'])
+@login_required
+def return_by_code(book_code):
+    if current_user.role != 'faculty':
+        return jsonify({'success': False, 'message': '权限不足'}), 403
+
+    record = (
+        BorrowRecord.query
+        .join(Book)
+        .filter(
+            BorrowRecord.user_id == current_user.id,
+            BorrowRecord.status == 'borrowed',
+            Book.book_code == book_code
+        )
+        .first()
+    )
+
+    if not record:
+        return jsonify({'success': False, 'message': '未找到与该编码匹配的在借记录'}), 404
+
+    record.status = 'returned'
+    record.return_date = datetime.utcnow()
+    record.book.quantity_available += 1
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': f'成功归还《{record.book.title}》'})
 
 @app.route('/want/<int:book_id>', methods=['POST'])
 @login_required
@@ -499,55 +579,148 @@ def import_books():
     if current_user.role != 'admin': abort(403)
     file = request.files.get('book_file')
     upload_mode = request.form.get('upload_mode', 'append')
+
     if not file or file.filename == '':
         flash('未选择任何文件。', 'danger')
         return redirect(url_for('admin_dashboard'))
-    if file and file.filename.endswith('.xlsx'):
-        try:
-            if upload_mode == 'overwrite':
-                db.session.query(BorrowRecord).delete()
-                db.session.query(Want).delete()
-                db.session.query(Book).delete()
-                db.session.commit()
-                flash('已清空现有书库，正在导入新数据...', 'info')
-            df = pd.read_excel(file)
-            required_columns = {'书名', '出版社', 'ISBN', '编码', '库存量', '书柜号'}
-            if not required_columns.issubset(df.columns):
-                flash(f'Excel文件必须包含以下列: {", ".join(required_columns)}', 'danger')
-                return redirect(url_for('admin_dashboard'))
-            
-            added_count = 0
-            skipped_count = 0
-            
-            for _, row in df.iterrows():
-                book_code, isbn, stock = str(row['编码']), str(row['ISBN']), int(row['库存量'])
-                
-                # 修复：只检查book_code是否重复，允许相同ISBN的不同编码
-                existing_book = Book.query.filter_by(book_code=book_code).first()
-                
-                if not existing_book:
-                    db.session.add(Book(
-                        title=row['书名'], 
-                        publisher=row['出版社'], 
-                        isbn=isbn, 
-                        book_code=book_code, 
-                        stock=stock, 
-                        quantity_available=stock, 
-                        bookshelf_number=row.get('书柜号')
-                    ))
-                    added_count += 1
-                else:
-                    skipped_count += 1
-                    print(f"跳过重复编码: {book_code}")
-            
+
+    if not is_allowed_excel_file(file):
+        flash('请上传受支持的 .xlsx 格式文件。', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    try:
+        if upload_mode == 'overwrite':
+            db.session.query(BorrowRecord).delete()
+            db.session.query(Want).delete()
+            db.session.query(Book).delete()
             db.session.commit()
-            flash(f'数据导入完成！新增 {added_count} 本书，跳过 {skipped_count} 本重复编码的书。', 'success')
-            update_ai_catalog_on_startup()
-            flash('AI检索引擎已同步更新。', 'success')
-        except Exception as e:
-            db.session.rollback()
-            flash(f'导入失败: {e}', 'danger')
-    else: flash('请上传 .xlsx 格式的文件。', 'danger')
+            flash('已清空现有书库，正在导入新数据...', 'info')
+
+        df = pd.read_excel(file)
+        required_columns = {'书名', '出版社', 'ISBN', '编码', '库存量', '书柜号'}
+        if not required_columns.issubset(df.columns):
+            flash(f'Excel文件必须包含以下列: {", ".join(required_columns)}', 'danger')
+            return redirect(url_for('admin_dashboard'))
+
+        added_count = 0
+        skipped_count = 0
+
+        for _, row in df.iterrows():
+            book_code, isbn = str(row['编码']).strip(), str(row['ISBN']).strip()
+
+            try:
+                stock = int(row['库存量'])
+            except (ValueError, TypeError):
+                skipped_count += 1
+                continue
+
+            existing_book = Book.query.filter_by(book_code=book_code).first()
+
+            if not existing_book:
+                db.session.add(Book(
+                    title=row['书名'],
+                    publisher=row['出版社'],
+                    isbn=isbn,
+                    book_code=book_code,
+                    stock=stock,
+                    quantity_available=stock,
+                    bookshelf_number=row.get('书柜号')
+                ))
+                added_count += 1
+            else:
+                skipped_count += 1
+
+        db.session.commit()
+        flash(f'数据导入完成！新增 {added_count} 本书，跳过 {skipped_count} 本重复编码的书。', 'success')
+        update_ai_catalog_on_startup()
+        flash('AI检索引擎已同步更新。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'导入失败: {e}', 'danger')
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/admin/import-users', methods=['POST'])
+@login_required
+def admin_import_users():
+    if current_user.role != 'admin':
+        abort(403)
+
+    file = request.files.get('user_file')
+    if not file or file.filename == '':
+        flash('未选择任何用户数据文件。', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    if not is_allowed_excel_file(file):
+        flash('请上传受支持的 .xlsx 格式用户文件。', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    try:
+        df = pd.read_excel(file)
+    except Exception as exc:
+        flash(f'无法读取上传的用户文件: {exc}', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    required_sets = [
+        {'工号', '教职工姓名', '初始密码'},
+        {'工号', '教职工姓名', '身份证后四位'}
+    ]
+
+    if not any(columns.issubset(df.columns) for columns in required_sets):
+        flash('Excel文件必须包含「工号」「教职工姓名」以及「初始密码」或「身份证后四位」列。', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    password_column = '初始密码' if '初始密码' in df.columns else '身份证后四位'
+
+    added, skipped = 0, 0
+
+    for _, row in df.iterrows():
+        username = str(row.get('工号', '')).strip()
+        full_name = str(row.get('教职工姓名', '')).strip() or username
+        raw_password = row.get(password_column)
+
+        password = None
+        if pd.isna(raw_password):
+            password = None
+        elif isinstance(raw_password, float):
+            if raw_password.is_integer():
+                password = str(int(raw_password))
+            else:
+                password = str(raw_password)
+        elif isinstance(raw_password, (int, np.integer)):
+            password = str(raw_password)
+        elif isinstance(raw_password, str):
+            password = raw_password.strip()
+
+        if password:
+            password = password.strip()
+            if password.lower() == 'nan':
+                password = None
+
+        if not username or not password:
+            skipped += 1
+            continue
+
+        if User.query.filter_by(username=username).first():
+            skipped += 1
+            continue
+
+        new_user = User(
+            username=username,
+            full_name=full_name,
+            role='faculty',
+            password_hash=generate_password_hash(password)
+        )
+        db.session.add(new_user)
+        added += 1
+
+    if added:
+        db.session.commit()
+        flash(f'成功导入 {added} 位新用户，跳过 {skipped} 条记录。', 'success')
+    else:
+        db.session.rollback()
+        flash(f'没有导入新的用户，跳过 {skipped} 条记录。', 'warning')
+
     return redirect(url_for('admin_dashboard'))
 
 @app.route('/admin/return', methods=['POST'])
