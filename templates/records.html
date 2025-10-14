@@ -9,6 +9,7 @@
         <h2 class="text-xl font-semibold text-gray-800">我的借阅记录</h2>
         {% if borrowed_count > 0 %}
         <form action="{{ url_for('return_all_books') }}" method="POST">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="bg-green-600 text-white px-4 py-2 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 fluent-btn">
                 一键归还全部 ({{ borrowed_count }})
             </button>
@@ -43,6 +44,7 @@
                     <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                         {% if record.status == 'borrowed' %}
                         <form action="{{ url_for('return_book', record_id=record.id) }}" method="POST">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="text-white bg-theme-primary hover:bg-theme-primary-dark px-3 py-1 fluent-btn">归还</button>
                         </form>
                         {% else %}

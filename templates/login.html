@@ -169,6 +169,7 @@
 
             <!-- 教职工登录表单 -->
             <form id="faculty-form" method="POST" action="{{ url_for('login') }}" class="space-y-5">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="type" value="faculty">
                 
                 <div>
@@ -200,6 +201,7 @@
 
             <!-- 管理员登录表单 -->
             <form id="admin-form" method="POST" action="{{ url_for('login') }}" class="space-y-5 hidden">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="hidden" name="type" value="admin">
                 
                 <div>
