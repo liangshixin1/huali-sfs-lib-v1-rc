@@ -3,13 +3,15 @@ import pandas as pd
 import io
 import json
 import time
+import secrets
 import requests
-from flask import Flask, render_template, request, redirect, url_for, flash, abort, Response, stream_with_context, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, abort, Response, stream_with_context, jsonify, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy import or_, func, desc, asc
+from sqlalchemy.exc import NoResultFound
 from datetime import datetime, timedelta, date
 from openai import OpenAI
 import jieba
@@ -18,7 +20,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from dotenv import load_dotenv
 from functools import wraps
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 load_dotenv()
 
@@ -34,6 +38,7 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'
 app.config['MAX_CONTENT_LENGTH'] = int(os.getenv('MAX_CONTENT_LENGTH', 10 * 1024 * 1024))
 app.config['ALLOWED_EXCEL_EXTENSIONS'] = {'xlsx'}
+app.jinja_env.autoescape = True
 
 # --- AI & Speech API 配置 ---
 AI_DETAILS_API_KEY = os.getenv("AI_DETAILS_API_KEY")
@@ -50,25 +55,117 @@ BAIDU_SECRET_KEY = os.getenv("BAIDU_SPEECH_SECRET_KEY")
 vectorizer, book_vectors, book_corpus_data = None, None, []
 baidu_token_cache = {'token': None, 'expires_at': 0}
 
+retry_strategy = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
+_safe_http_session = requests.Session()
+adapter = HTTPAdapter(max_retries=retry_strategy)
+_safe_http_session.mount('http://', adapter)
+_safe_http_session.mount('https://', adapter)
+ALLOWED_EXTERNAL_HOSTS = {'aip.baidubce.com', 'tsn.baidu.com'}
+
+
+def safe_api_request(url, method='post', **kwargs):
+    """Perform outbound HTTP requests with SSRF and timeout protections."""
+    parsed = urlparse(url)
+    if parsed.scheme not in {'http', 'https'}:
+        raise ValueError('Unsupported URL scheme')
+    if parsed.hostname not in ALLOWED_EXTERNAL_HOSTS:
+        raise ValueError('Disallowed external host')
+
+    kwargs.setdefault('timeout', 10)
+    kwargs.setdefault('allow_redirects', False)
+    response = _safe_http_session.request(method.upper(), url, **kwargs)
+    response.raise_for_status()
+    return response
+
 
 def is_allowed_excel_file(file_storage):
-    """Validate uploaded Excel files using both extension and mimetype checks."""
+    """Validate uploaded Excel files via extension, header and parsing checks."""
     if not file_storage or not file_storage.filename:
         return False
 
     filename = secure_filename(file_storage.filename)
-    if '.' not in filename:
+    if not filename.lower().endswith('.xlsx'):
         return False
 
-    extension = filename.rsplit('.', 1)[1].lower()
-    if extension not in app.config['ALLOWED_EXCEL_EXTENSIONS']:
+    file_storage.stream.seek(0)
+    file_header = file_storage.stream.read(4)
+    file_storage.stream.seek(0)
+    if not file_header.startswith(b'PK'):
         return False
 
-    mimetype = (file_storage.mimetype or '').lower()
-    if mimetype and all(token not in mimetype for token in ['sheet', 'excel']) and mimetype != 'application/octet-stream':
+    try:
+        pd.read_excel(file_storage, nrows=0)
+        file_storage.stream.seek(0)
+    except Exception:
         return False
 
     return True
+
+
+def escape_like_specials(value: str) -> str:
+    return value.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
+def build_fuzzy_filters(columns, raw_value):
+    if not raw_value:
+        return []
+    sanitized = escape_like_specials(raw_value.strip())
+    if not sanitized:
+        return []
+    pattern = f"%{sanitized}%"
+    return [column.ilike(pattern, escape='\\') for column in columns]
+
+
+def sanitize_excel_cell(value):
+    if isinstance(value, str):
+        if value.startswith(('=', '+', '-', '@')) or value.startswith('\t') or value.startswith('\r'):
+            return "'" + value
+    return value
+
+
+def sanitize_book_payload(data):
+    allowed_fields = {'title', 'publisher', 'isbn', 'book_code', 'stock', 'bookshelf_number'}
+    sanitized = {}
+    for field in allowed_fields:
+        if field in data:
+            value = data.get(field)
+            if isinstance(value, str):
+                value = value.strip()
+            sanitized[field] = value
+
+    if 'stock' in sanitized:
+        try:
+            sanitized['stock'] = max(0, int(sanitized['stock']))
+        except (TypeError, ValueError):
+            raise ValueError('库存量必须为非负整数。')
+    if sanitized.get('bookshelf_number') == '':
+        sanitized['bookshelf_number'] = None
+    if sanitized.get('publisher') == '':
+        sanitized['publisher'] = None
+    return sanitized
+
+
+def generate_csrf_token():
+    token = session.get('_csrf_token')
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session['_csrf_token'] = token
+    return token
+
+
+app.jinja_env.globals['csrf_token'] = generate_csrf_token
+
+
+@app.before_request
+def enforce_csrf_protection():
+    if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+        session_token = session.get('_csrf_token')
+        submitted_token = request.headers.get('X-CSRFToken')
+        if not request.is_json:
+            submitted_token = request.form.get('_csrf_token') or submitted_token
+        if not session_token or not submitted_token or not secrets.compare_digest(session_token, submitted_token):
+            abort(400)
+
 
 # --- 数据库和登录管理器初始化 ---
 db = SQLAlchemy(app)
@@ -181,6 +278,40 @@ def limit_api_usage(api_name, limit=15):
         return decorated_function
     return decorator
 
+
+class BorrowError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
+
+
+def borrow_book_with_lock(book_id, user_id):
+    try:
+        with db.session.begin():
+            book = (
+                db.session.query(Book)
+                .with_for_update()
+                .filter_by(id=book_id)
+                .one()
+            )
+            if book.quantity_available <= 0:
+                raise BorrowError('该书已无库存可借。')
+            book.quantity_available -= 1
+            db.session.add(BorrowRecord(user_id=user_id, book_id=book.id))
+            book_title = book.title
+        return True, f'成功借阅《{book_title}》。', 'success'
+    except BorrowError as exc:
+        db.session.rollback()
+        return False, exc.message, 'warning'
+    except NoResultFound:
+        db.session.rollback()
+        return False, '未找到该书籍。', 'danger'
+    except Exception:
+        db.session.rollback()
+        app.logger.exception('Unexpected error when borrowing book %s for user %s', book_id, user_id)
+        return False, '借阅失败，请稍后重试。', 'danger'
+
+
 # --- 百度语音服务 ---
 def get_baidu_token():
     now = time.time()
@@ -188,13 +319,15 @@ def get_baidu_token():
         return baidu_token_cache['token']
     url = "https://aip.baidubce.com/oauth/2.0/token"
     params = {"grant_type": "client_credentials", "client_id": BAIDU_API_KEY, "client_secret": BAIDU_SECRET_KEY}
-    response = requests.post(url, params=params)
-    if response.status_code == 200:
+    try:
+        response = safe_api_request(url, method='post', params=params)
         data = response.json()
-        baidu_token_cache['token'] = data.get("access_token")
-        baidu_token_cache['expires_at'] = now + data.get("expires_in", 3600) - 60
-        return baidu_token_cache['token']
-    return None
+    except (requests.RequestException, ValueError) as exc:
+        app.logger.warning('Failed to obtain Baidu token: %s', exc)
+        return None
+    baidu_token_cache['token'] = data.get("access_token")
+    baidu_token_cache['expires_at'] = now + data.get("expires_in", 3600) - 60
+    return baidu_token_cache['token']
 
 # --- 搜索建议API ---
 @app.route('/search-suggestions')
@@ -203,15 +336,13 @@ def search_suggestions():
     query = request.args.get('q', '').strip()
     if not query or len(query) < 1:
         return jsonify([])
-    
+
     # 搜索书名和编码
-    books = Book.query.filter(
-        or_(
-            Book.title.ilike(f"%{query}%"),
-            Book.book_code.ilike(f"%{query}%"),
-            Book.publisher.ilike(f"%{query}%")
-        )
-    ).limit(10).all()
+    filters = build_fuzzy_filters([Book.title, Book.book_code, Book.publisher], query)
+    if not filters:
+        return jsonify([])
+
+    books = Book.query.filter(or_(*filters)).limit(10).all()
     
     suggestions = []
     seen = set()
@@ -245,6 +376,7 @@ def login():
         login_type, username, password = request.form.get('type'), request.form.get('username'), request.form.get('password')
         user = User.query.filter_by(username=username).first()
         if user and user.check_password(password) and ((login_type == 'admin' and user.role == 'admin') or (login_type == 'faculty' and user.role == 'faculty')):
+            session.clear()
             login_user(user)
             return redirect(url_for('admin_dashboard' if user.role == 'admin' else 'index'))
         else: flash('用户名、密码或登录类型错误。', 'danger')
@@ -265,16 +397,16 @@ def index():
     search_query = request.args.get('search_query', '')
     sort_by = request.args.get('sort_by', 'id')
     sort_order = request.args.get('sort_order', 'desc')
-    
+
     query = Book.query
-    if search_query: 
-        query = query.filter(or_(
-            Book.title.ilike(f"%{search_query}%"), 
-            Book.book_code.ilike(f"%{search_query}%"),
-            Book.publisher.ilike(f"%{search_query}%"),
-            Book.bookshelf_number.ilike(f"%{search_query}%")
-        ))
-    
+    if search_query:
+        filters = build_fuzzy_filters(
+            [Book.title, Book.book_code, Book.publisher, Book.bookshelf_number],
+            search_query
+        )
+        if filters:
+            query = query.filter(or_(*filters))
+
     # 排序逻辑
     sort_column = getattr(Book, sort_by, Book.id)
     if sort_order == 'desc':
@@ -302,13 +434,9 @@ def borrow_book(book_id):
     existing_loan = BorrowRecord.query.filter_by(user_id=current_user.id, book_id=book.id, status='borrowed').first()
     if existing_loan:
         flash(f'您已借阅《{book.title}》，无法重复借阅。', 'warning')
-    elif book.quantity_available <= 0:
-        flash('该书已无库存可借。', 'warning')
     else:
-        book.quantity_available -= 1
-        db.session.add(BorrowRecord(user_id=current_user.id, book_id=book.id))
-        db.session.commit()
-        flash(f'成功借阅《{book.title}》。', 'success')
+        success, message, category = borrow_book_with_lock(book.id, current_user.id)
+        flash(message, category)
     return redirect(request.referrer or url_for('index'))
 
 @app.route('/borrow-by-code/<string:book_code>', methods=['POST'])
@@ -319,11 +447,11 @@ def borrow_by_code(book_code):
     if not book: return jsonify({'success': False, 'message': '未找到该书'}), 404
     existing_loan = BorrowRecord.query.filter_by(user_id=current_user.id, book_id=book.id, status='borrowed').first()
     if existing_loan: return jsonify({'success': False, 'message': f'您已借阅《{book.title}》'})
-    if book.quantity_available <= 0: return jsonify({'success': False, 'message': '该书已无库存'})
-    book.quantity_available -= 1
-    db.session.add(BorrowRecord(user_id=current_user.id, book_id=book.id))
-    db.session.commit()
-    return jsonify({'success': True, 'message': f'成功借阅《{book.title}》'})
+    success, message, category = borrow_book_with_lock(book.id, current_user.id)
+    if success:
+        return jsonify({'success': True, 'message': message})
+    status_code = 400 if category == 'warning' else 500
+    return jsonify({'success': False, 'message': message}), status_code
 
 
 @app.route('/return-by-code/<string:book_code>', methods=['POST'])
@@ -529,12 +657,18 @@ def text_to_speech():
         'aue': 3
     }
     
-    response = requests.post("https://tsn.baidu.com/text2audio", data=payload)
-    
+    try:
+        response = safe_api_request("https://tsn.baidu.com/text2audio", method='post', data=payload)
+    except (requests.RequestException, ValueError) as exc:
+        app.logger.warning('Text-to-speech request failed: %s', exc)
+        return jsonify({'error': '语音合成服务暂时不可用'}), 502
+
     if response.headers.get("Content-Type") == "audio/mp3":
         return Response(response.content, mimetype='audio/mp3')
-    else:
+    try:
         return jsonify(response.json()), response.status_code
+    except ValueError:
+        return jsonify({'error': '语音合成服务返回了无法解析的结果'}), 502
 
 # --- 管理员路由 ---
 @app.route('/admin/dashboard')
@@ -546,7 +680,10 @@ def admin_dashboard():
     wants_query = db.session.query(Book.title, func.count(Want.id).label('want_count')).join(Want).group_by(Book.title).order_by(func.count(Want.id).desc()).all()
     filters = {'name': request.args.get('name', ''), 'start_date': request.args.get('start_date', ''), 'end_date': request.args.get('end_date', ''), 'status': request.args.get('status', 'all')}
     query = BorrowRecord.query.join(User).join(Book)
-    if filters['name']: query = query.filter(User.full_name.ilike(f"%{filters['name']}%"))
+    if filters['name']:
+        name_filters = build_fuzzy_filters([User.full_name], filters['name'])
+        if name_filters:
+            query = query.filter(name_filters[0])
     if filters['start_date']: query = query.filter(BorrowRecord.borrow_date >= datetime.strptime(filters['start_date'], '%Y-%m-%d'))
     if filters['end_date']: query = query.filter(BorrowRecord.borrow_date < (datetime.strptime(filters['end_date'], '%Y-%m-%d') + timedelta(days=1)))
     if filters['status'] != 'all': query = query.filter(BorrowRecord.status == filters['status'])
@@ -741,11 +878,33 @@ def admin_return_book():
 @login_required
 def admin_add_book():
     if current_user.role != 'admin': abort(403)
-    data = request.form
-    if Book.query.filter_by(book_code=data['book_code']).first():
+    try:
+        book_data = sanitize_book_payload(request.form)
+    except ValueError as exc:
+        flash(str(exc), 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    required_fields = {'title', 'isbn', 'book_code', 'stock'}
+    if not required_fields.issubset(book_data.keys()):
+        flash('请完整填写书名、ISBN、图书编码和库存量。', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    if not all(book_data.get(field) for field in {'title', 'isbn', 'book_code'}):
+        flash('书名、ISBN 和图书编码不能为空。', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    if Book.query.filter_by(book_code=book_data['book_code']).first():
         flash('图书编码已存在。', 'danger')
     else:
-        new_book = Book(title=data['title'], publisher=data['publisher'], isbn=data['isbn'], book_code=data['book_code'], stock=int(data['stock']), quantity_available=int(data['stock']), bookshelf_number=data.get('bookshelf_number'))
+        new_book = Book(
+            title=book_data['title'],
+            publisher=book_data.get('publisher'),
+            isbn=book_data['isbn'],
+            book_code=book_data['book_code'],
+            stock=book_data['stock'],
+            quantity_available=book_data['stock'],
+            bookshelf_number=book_data.get('bookshelf_number')
+        )
         db.session.add(new_book)
         db.session.commit()
         flash(f'书籍《{new_book.title}》添加成功。', 'success')
@@ -756,10 +915,33 @@ def admin_add_book():
 def admin_update_book(book_id):
     if current_user.role != 'admin': abort(403)
     book = Book.query.get_or_404(book_id)
-    data = request.form
-    stock_change = int(data['stock']) - book.stock
-    book.title, book.publisher, book.isbn, book.book_code, book.stock, book.bookshelf_number = data['title'], data['publisher'], data['isbn'], data['book_code'], int(data['stock']), data.get('bookshelf_number')
-    book.quantity_available += stock_change
+    try:
+        incoming = sanitize_book_payload(request.form)
+    except ValueError as exc:
+        flash(str(exc), 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    if 'book_code' in incoming and incoming['book_code'] != book.book_code and Book.query.filter_by(book_code=incoming['book_code']).first():
+        flash('图书编码已存在。', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    stock_change = 0
+    if 'stock' in incoming:
+        stock_change = incoming['stock'] - book.stock
+
+    for required in ('title', 'isbn', 'book_code'):
+        if required in incoming and not incoming[required]:
+            flash('书名、ISBN 和图书编码不能为空。', 'danger')
+            return redirect(url_for('admin_dashboard'))
+
+    for field in ('title', 'publisher', 'isbn', 'book_code', 'bookshelf_number'):
+        if field in incoming:
+            setattr(book, field, incoming[field])
+
+    if 'stock' in incoming:
+        book.stock = incoming['stock']
+        book.quantity_available = max(0, min(book.quantity_available + stock_change, book.stock))
+
     db.session.commit()
     flash(f'书籍《{book.title}》信息更新成功。', 'success')
     return redirect(url_for('admin_dashboard'))
@@ -820,14 +1002,21 @@ def admin_export_records():
     if current_user.role != 'admin': abort(403)
     filters = {'name': request.args.get('name', ''), 'start_date': request.args.get('start_date', ''), 'end_date': request.args.get('end_date', ''), 'status': request.args.get('status', 'all')}
     query = BorrowRecord.query.join(User).join(Book)
-    if filters['name']: query = query.filter(User.full_name.ilike(f"%{filters['name']}%"))
+    if filters['name']:
+        name_filters = build_fuzzy_filters([User.full_name], filters['name'])
+        if name_filters:
+            query = query.filter(name_filters[0])
     if filters['start_date']: query = query.filter(BorrowRecord.borrow_date >= datetime.strptime(filters['start_date'], '%Y-%m-%d'))
     if filters['end_date']: query = query.filter(BorrowRecord.borrow_date < (datetime.strptime(filters['end_date'], '%Y-%m-%d') + timedelta(days=1)))
     if filters['status'] != 'all': query = query.filter(BorrowRecord.status == filters['status'])
     records = query.order_by(BorrowRecord.borrow_date.desc()).all()
     data = [{'书名': r.book.title, '图书编码': r.book.book_code, '借阅人': r.borrower.full_name, '工号': r.borrower.username, '借阅日期': r.borrow_date.strftime('%Y-%m-%d %H:%M'), '应还日期': r.due_date.strftime('%Y-%m-%d'), '归还日期': r.return_date.strftime('%Y-%m-%d %H:%M') if r.return_date else '未归还', '状态': '已归还' if r.status == 'returned' else '借阅中'} for r in records]
-    df, output = pd.DataFrame(data), io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False, sheet_name='借阅记录')
+    df = pd.DataFrame(data)
+    if not df.empty:
+        df = df.applymap(sanitize_excel_cell)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='借阅记录')
     output.seek(0)
     filename = f"borrow_records_{datetime.now().strftime('%Y%m%d')}.xlsx"
     return Response(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment;filename={filename}"})

@@ -175,9 +175,9 @@
                     </div>
                     
                     <!-- AI 按钮 -->
-                    <button class="ask-ai-details-btn ai-btn-modern" 
-                            data-book-title="{{ book.title }}" 
-                            data-book-isbn="{{ book.isbn }}" 
+                    <button class="ask-ai-details-btn ai-btn-modern"
+                            data-book-title="{{ book.title | e }}"
+                            data-book-isbn="{{ book.isbn | e }}"
                             title="询问AI获取书籍详情">
                         <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -205,6 +205,7 @@
                     {% if book.quantity_available > 0 %}
                         {% if not current_user.records | selectattr('book_id', 'equalto', book.id) | selectattr('status', 'equalto', 'borrowed') | list %}
                         <form method="POST" action="{{ url_for('borrow_book', book_id=book.id) }}" class="action-form">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="action-btn primary" title="借阅图书">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
@@ -223,6 +224,7 @@
                     {% else %}
                         {% if not current_user.has_wanted(book) %}
                         <form method="POST" action="{{ url_for('want_book', book_id=book.id) }}" class="action-form">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="action-btn secondary" title="想要此书">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -258,7 +260,7 @@
                     {% else %}
                         <span class="status-mini unavailable">已借完</span>
                     {% endif %}
-                    <button class="ask-ai-details-btn ai-btn-mini" data-book-title="{{ book.title }}" data-book-isbn="{{ book.isbn }}">
+                    <button class="ask-ai-details-btn ai-btn-mini" data-book-title="{{ book.title | e }}" data-book-isbn="{{ book.isbn | e }}">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
@@ -1092,6 +1094,13 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', () => {
+    const csrfTokenMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrfToken = csrfTokenMeta ? csrfTokenMeta.getAttribute('content') : '';
+    const withCsrf = (headers = {}) => ({
+        ...headers,
+        ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+    });
+
     // 初始化加载动画
     const showLoading = () => {
         document.getElementById('books-container').style.display = 'none';
@@ -1315,10 +1324,10 @@ document.addEventListener('DOMContentLoaded', () => {
         button.disabled = true;
 
         try {
-            const response = await fetch('/text-to-speech', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ text }) 
+            const response = await fetch('/text-to-speech', {
+                method: 'POST',
+                headers: withCsrf({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ text })
             });
             
             if (!response.ok) {
@@ -1386,10 +1395,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const aiMessageDiv = renderMessage('assistant', '▍');
             let fullResponse = '';
             try {
-                const response = await fetch('/ask-ai', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ history: chatHistory }) 
+                const response = await fetch('/ask-ai', {
+                    method: 'POST',
+                    headers: withCsrf({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ history: chatHistory })
                 });
                 
                 if (!response.ok) {
@@ -1519,10 +1528,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             let expandedQuery = '';
             try {
-                const expandRes = await fetch('/ai-expand-query', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ query: userQuery }) 
+                const expandRes = await fetch('/ai-expand-query', {
+                    method: 'POST',
+                    headers: withCsrf({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ query: userQuery })
                 });
                 if(expandRes.ok) {
                     const expandData = await expandRes.json();
@@ -1537,10 +1546,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const aiMessageDiv = renderMessage('assistant', '▍');
             let fullResponse = '';
             try {
-                const response = await fetch('/ai-search', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ query: userQuery, expanded_query: finalQueryForRec }) 
+                const response = await fetch('/ai-search', {
+                    method: 'POST',
+                    headers: withCsrf({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ query: userQuery, expanded_query: finalQueryForRec })
                 });
                 
                 if (!response.ok) {
@@ -1580,10 +1589,10 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const fetchRecommendations = async (query) => {
             try {
-                const res = await fetch('/ai-recommend', { 
-                    method: 'POST', 
-                    headers: {'Content-Type': 'application/json'}, 
-                    body: JSON.stringify({query}) 
+                const res = await fetch('/ai-recommend', {
+                    method: 'POST',
+                    headers: withCsrf({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({query})
                 });
                 const {success, recommendations} = await res.json();
                 
@@ -1653,7 +1662,10 @@ document.addEventListener('DOMContentLoaded', () => {
             button.innerText = '处理中...';
 
             try {
-                const response = await fetch(`/borrow-by-code/${bookCode}`, { method: 'POST' });
+                const response = await fetch(`/borrow-by-code/${bookCode}`, {
+                    method: 'POST',
+                    headers: withCsrf()
+                });
                 const result = await response.json();
                 if (result.success) {
                     button.className = 'bg-gray-400 text-white px-3 py-1 text-xs fluent-btn cursor-not-allowed';
@@ -1745,6 +1757,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!scanModal) {
         return;
     }
+
+    const csrfTokenMeta = document.querySelector('meta[name="csrf-token"]');
+    const csrfToken = csrfTokenMeta ? csrfTokenMeta.getAttribute('content') : '';
+    const withCsrf = (headers = {}) => ({
+        ...headers,
+        ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
+    });
 
     const video = document.getElementById('scan-video');
     const statusEl = document.getElementById('scan-status');
@@ -1877,7 +1896,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(endpoints[currentMode](code), {
                 method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                headers: withCsrf({ 'X-Requested-With': 'XMLHttpRequest' }),
                 credentials: 'same-origin'
             });
             const data = await response.json();
