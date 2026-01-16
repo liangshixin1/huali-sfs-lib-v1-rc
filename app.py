@@ -481,6 +481,19 @@ def return_by_code(book_code):
 
     return jsonify({'success': True, 'message': f'成功归还《{record.book.title}》'})
 
+@app.route('/return-by-code/<string:book_code>', methods=['POST'])
+@login_required
+def return_by_code(book_code):
+    if current_user.role != 'faculty': return jsonify({'success': False, 'message': '权限不足'}), 403
+    book = Book.query.filter_by(book_code=book_code).first()
+    if not book: return jsonify({'success': False, 'message': '未找到该书'}), 404
+    record = BorrowRecord.query.filter_by(user_id=current_user.id, book_id=book.id, status='borrowed').first()
+    if not record: return jsonify({'success': False, 'message': '没有该书的借阅记录'})
+    record.status, record.return_date = 'returned', datetime.utcnow()
+    book.quantity_available += 1
+    db.session.commit()
+    return jsonify({'success': True, 'message': f'成功归还《{book.title}》'})
+
 @app.route('/want/<int:book_id>', methods=['POST'])
 @login_required
 def want_book(book_id):
@@ -520,6 +533,12 @@ def return_all_books():
         db.session.commit()
         flash(f'成功归还 {len(records_to_return)} 本书籍。', 'success')
     return redirect(url_for('my_records'))
+
+@app.route('/scan')
+@login_required
+def scan():
+    if current_user.role != 'faculty': abort(403)
+    return render_template('scan.html')
 
 @app.route('/profile', methods=['GET', 'POST'])
 @login_required

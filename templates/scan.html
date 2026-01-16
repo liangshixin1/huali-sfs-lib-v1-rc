@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block title %}扫码借还{% endblock %}
+{% block content %}
+<div class="fluent-card max-w-md mx-auto">
+    <h2 class="text-xl font-semibold mb-4 text-center">扫码借还</h2>
+    <div class="flex justify-center space-x-4 mb-4">
+        <button id="mode-borrow" class="fluent-btn px-4 py-2 bg-theme-primary text-white">借书</button>
+        <button id="mode-return" class="fluent-btn px-4 py-2 bg-gray-200 text-gray-700">还书</button>
+    </div>
+    <div id="qr-reader" class="w-full"></div>
+    <p id="scan-result" class="mt-4 text-center text-sm"></p>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+<script>
+    const qr = new Html5Qrcode("qr-reader");
+    let mode = 'borrow';
+    function setMode(m){
+        mode = m;
+        document.getElementById('mode-borrow').classList.toggle('bg-theme-primary', mode==='borrow');
+        document.getElementById('mode-borrow').classList.toggle('text-white', mode==='borrow');
+        document.getElementById('mode-return').classList.toggle('bg-theme-primary', mode==='return');
+        document.getElementById('mode-return').classList.toggle('text-white', mode==='return');
+    }
+    document.getElementById('mode-borrow').onclick = () => setMode('borrow');
+    document.getElementById('mode-return').onclick = () => setMode('return');
+    function handleScan(decodedText){
+        const code = decodedText.trim();
+        qr.pause(true);
+        fetch(`/${mode}-by-code/${encodeURIComponent(code)}`, {method:'POST'})
+            .then(r=>r.json())
+            .then(d=>{document.getElementById('scan-result').textContent = d.message || '操作完成';})
+            .catch(()=>{document.getElementById('scan-result').textContent='操作失败';})
+            .finally(()=>{setTimeout(()=>{qr.resume();},1500);});
+    }
+    Html5Qrcode.getCameras().then(cameras => {
+        if (cameras && cameras.length) {
+            qr.start({ facingMode: { exact: "environment" } }, { fps: 10, qrbox: 250 }, handleScan);
+        }
+    });
+</script>
+{% endblock %}

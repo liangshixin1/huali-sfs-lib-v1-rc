@@ -469,6 +469,11 @@
                                     <span class="hidden lg:inline">我的借阅</span>
                                     <span class="lg:hidden">借阅</span>
                                 </a>
+                                <a href="{{ url_for('scan') }}" class="nav-link text-sm">
+                                    <i class="fas fa-qrcode"></i>
+                                    <span class="hidden lg:inline">扫码借还</span>
+                                    <span class="lg:hidden">扫码</span>
+                                </a>
                                 <a href="{{ url_for('profile') }}" class="nav-link text-sm">
                                     <i class="fas fa-key"></i>
                                     <span class="hidden lg:inline">修改密码</span>
@@ -519,6 +524,9 @@
                                 </a>
                                 <a href="{{ url_for('my_records') }}" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg mx-2 mb-1 transition-colors">
                                     <i class="fas fa-history mr-3 text-theme-primary w-4"></i>我的借阅
+                                </a>
+                                <a href="{{ url_for('scan') }}" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg mx-2 mb-1 transition-colors">
+                                    <i class="fas fa-qrcode mr-3 text-theme-primary w-4"></i>扫码借还
                                 </a>
                                 <a href="{{ url_for('profile') }}" class="block px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg mx-2 mb-1 transition-colors">
                                     <i class="fas fa-key mr-3 text-theme-primary w-4"></i>修改密码
