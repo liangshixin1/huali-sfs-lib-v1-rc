@@ -74,6 +74,13 @@
                     <span class="sm:hidden">用户</span>
                 </button>
             </li>
+            <li class="mr-2 flex-shrink-0" role="presentation">
+                <button class="inline-block p-3 sm:p-4 border-b-2 rounded-t-lg hover:text-gray-600 hover:border-gray-300 whitespace-nowrap" id="shelving-tab" data-tabs-target="#shelving" type="button" role="tab">
+                    <i class="fas fa-tags mr-1 sm:mr-2"></i>
+                    <span class="hidden sm:inline">资料室共建</span>
+                    <span class="sm:hidden">共建</span>
+                </button>
+            </li>
         </ul>
     </div>
 
@@ -427,6 +434,112 @@
                 </div>
             </div>
         </div>
+
+        <!-- 资料室共建 Tab -->
+        <div class="hidden p-2 sm:p-4 rounded-lg bg-gray-50/40" id="shelving" role="tabpanel" aria-labelledby="shelving-tab">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+                <!-- 导入待上架新书 -->
+                <div class="fluent-card">
+                    <h2 class="text-lg sm:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">
+                        <i class="fas fa-upload text-green-500 mr-2"></i>导入待上架新书列表
+                    </h2>
+                    <form action="{{ url_for('admin_import_pending_books') }}" method="post" enctype="multipart/form-data" class="space-y-3">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <div class="p-4 border rounded-lg bg-gray-50/50">
+                            <label class="text-sm font-medium text-gray-700 flex items-center mb-2">
+                                <i class="fas fa-file-excel text-green-600 mr-2"></i>选择Excel文件 (.xlsx)
+                            </label>
+                            <input type="file" name="pending_book_file" accept=".xlsx" required
+                                class="block w-full text-xs sm:text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:font-semibold file:bg-green-600 file:text-white hover:file:bg-green-700 cursor-pointer">
+                            <p class="text-xs text-gray-500 mt-2 leading-relaxed">
+                                文件需包含列：<span class="font-medium">书名</span>、<span class="font-medium">ISBN</span>（必需）、出版社（可选）、是否为丛书（可选，填"是"表示丛书）
+                            </p>
+                        </div>
+                        <button type="submit" class="w-full bg-green-600 text-white px-4 py-2 hover:bg-green-700 fluent-btn text-sm sm:text-base">
+                            <i class="fas fa-upload mr-2"></i>上传待上架书目
+                        </button>
+                    </form>
+                </div>
+
+                <!-- 待定书柜号管理 -->
+                <div class="fluent-card">
+                    <h2 class="text-lg sm:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">
+                        <i class="fas fa-map-marker-alt text-blue-500 mr-2"></i>待定书柜号管理
+                    </h2>
+                    <p class="text-sm text-gray-600 mb-4">管理已入库但书柜号为"待定"的图书</p>
+                    <button id="loadPendingBookshelfBtn" class="w-full bg-blue-600 text-white px-4 py-2 hover:bg-blue-700 fluent-btn text-sm sm:text-base mb-4">
+                        <i class="fas fa-sync-alt mr-2"></i>加载待定书柜号图书
+                    </button>
+                    <div id="pendingBookshelfList" class="space-y-2 max-h-64 overflow-y-auto hidden">
+                        <!-- 动态加载 -->
+                    </div>
+                    <div id="pendingBookshelfEmpty" class="text-center py-4 text-gray-500 hidden">
+                        <i class="fas fa-check-circle text-green-500 text-2xl mb-2"></i>
+                        <p class="text-sm">所有图书都已分配书柜号</p>
+                    </div>
+                    <div id="batchUpdateSection" class="hidden mt-4 pt-4 border-t">
+                        <button id="batchUpdateBtn" class="w-full bg-theme-primary text-white px-4 py-2 hover:bg-theme-primary-dark fluent-btn text-sm">
+                            <i class="fas fa-save mr-2"></i>批量保存书柜号
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 待上架图书列表 -->
+                <div class="fluent-card lg:col-span-2">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-lg sm:text-xl font-semibold text-gray-800">
+                            <i class="fas fa-list text-purple-500 mr-2"></i>当前待上架图书
+                        </h2>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 text-xs sm:text-sm" id="pendingBooksTable">
+                            <thead class="bg-gray-50/50">
+                                <tr>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">书名</th>
+                                    <th class="hidden sm:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">出版社</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase">ISBN</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase">丛书</th>
+                                    <th class="px-2 sm:px-4 py-2 sm:py-3 text-center text-xs font-medium text-gray-500 uppercase">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200" id="pendingBooksBody">
+                                {% for book in pending_books if pending_books is defined %}
+                                <tr class="hover:bg-gray-50/70">
+                                    <td class="px-2 sm:px-4 py-2 sm:py-4">
+                                        <div class="font-medium text-gray-900">{{ book.title[:30] }}{% if book.title|length > 30 %}...{% endif %}</div>
+                                    </td>
+                                    <td class="hidden sm:table-cell px-4 py-4 text-gray-500">{{ book.publisher or '-' }}</td>
+                                    <td class="px-2 sm:px-4 py-2 sm:py-4 font-mono text-gray-500">{{ book.isbn }}</td>
+                                    <td class="px-2 sm:px-4 py-2 sm:py-4 text-center">
+                                        {% if book.is_series %}
+                                        <span class="text-purple-600"><i class="fas fa-check"></i></span>
+                                        {% else %}
+                                        <span class="text-gray-300">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-2 sm:px-4 py-2 sm:py-4 text-center">
+                                        <form action="{{ url_for('admin_delete_pending_book', book_id=book.id) }}" method="POST" class="inline">
+                                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                            <button type="submit" class="text-red-500 hover:text-red-600 text-xs" onclick="return confirm('确定要下架《{{ book.title }}》吗？')">
+                                                <i class="fas fa-trash mr-1"></i>下架
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center py-8 text-gray-500">
+                                        <i class="fas fa-inbox text-gray-300 text-2xl mb-2"></i>
+                                        <p>暂无待上架图书，请先导入</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -439,7 +552,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabs = [
         { btn: document.getElementById('dashboard-tab'), panel: document.getElementById('dashboard') },
         { btn: document.getElementById('books-tab'), panel: document.getElementById('books') },
-        { btn: document.getElementById('users-tab'), panel: document.getElementById('users') }
+        { btn: document.getElementById('users-tab'), panel: document.getElementById('users') },
+        { btn: document.getElementById('shelving-tab'), panel: document.getElementById('shelving') }
     ];
     
     function switchTab(selectedTab) {
@@ -685,6 +799,117 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }, 100);
+
+    // --- 待定书柜号管理 ---
+    const loadPendingBookshelfBtn = document.getElementById('loadPendingBookshelfBtn');
+    const pendingBookshelfList = document.getElementById('pendingBookshelfList');
+    const pendingBookshelfEmpty = document.getElementById('pendingBookshelfEmpty');
+    const batchUpdateSection = document.getElementById('batchUpdateSection');
+    const batchUpdateBtn = document.getElementById('batchUpdateBtn');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+    let pendingBookshelfData = [];
+
+    if (loadPendingBookshelfBtn) {
+        loadPendingBookshelfBtn.addEventListener('click', async () => {
+            loadPendingBookshelfBtn.disabled = true;
+            loadPendingBookshelfBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>加载中...';
+
+            try {
+                const response = await fetch('/admin/pending-bookshelf');
+                const data = await response.json();
+                pendingBookshelfData = data;
+
+                if (data.length === 0) {
+                    pendingBookshelfList.classList.add('hidden');
+                    pendingBookshelfEmpty.classList.remove('hidden');
+                    batchUpdateSection.classList.add('hidden');
+                } else {
+                    pendingBookshelfEmpty.classList.add('hidden');
+                    pendingBookshelfList.classList.remove('hidden');
+                    batchUpdateSection.classList.remove('hidden');
+
+                    pendingBookshelfList.innerHTML = data.map(book => `
+                        <div class="bg-gray-50 p-3 rounded-lg border border-gray-200" data-book-id="${book.id}">
+                            <div class="font-medium text-gray-900 text-sm mb-1">${escapeHtml(book.title)}</div>
+                            <div class="text-xs text-gray-500 mb-2">编码: ${escapeHtml(book.book_code)}</div>
+                            <div class="flex gap-2">
+                                <select class="pending-row flex-1 px-2 py-1 border border-gray-300 rounded text-xs">
+                                    <option value="">第几排</option>
+                                    ${[1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}">第${n}排</option>`).join('')}
+                                </select>
+                                <select class="pending-col flex-1 px-2 py-1 border border-gray-300 rounded text-xs">
+                                    <option value="">第几柜</option>
+                                    ${[1,2,3,4,5,6,7,8,9,10].map(n => `<option value="${n}">第${n}柜</option>`).join('')}
+                                </select>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('加载失败:', error);
+                alert('加载失败，请重试');
+            } finally {
+                loadPendingBookshelfBtn.disabled = false;
+                loadPendingBookshelfBtn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>加载待定书柜号图书';
+            }
+        });
+    }
+
+    if (batchUpdateBtn) {
+        batchUpdateBtn.addEventListener('click', async () => {
+            const updates = [];
+            pendingBookshelfList.querySelectorAll('[data-book-id]').forEach(item => {
+                const id = parseInt(item.dataset.bookId);
+                const row = item.querySelector('.pending-row').value;
+                const col = item.querySelector('.pending-col').value;
+                if (row && col) {
+                    updates.push({ id, row: parseInt(row), col: parseInt(col) });
+                }
+            });
+
+            if (updates.length === 0) {
+                alert('请至少为一本书设置书柜号');
+                return;
+            }
+
+            batchUpdateBtn.disabled = true;
+            batchUpdateBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>保存中...';
+
+            try {
+                const response = await fetch('/admin/batch-update-bookshelf', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({ updates })
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(data.message);
+                    // 重新加载
+                    loadPendingBookshelfBtn.click();
+                } else {
+                    alert(data.message || '更新失败');
+                }
+            } catch (error) {
+                console.error('更新失败:', error);
+                alert('更新失败，请重试');
+            } finally {
+                batchUpdateBtn.disabled = false;
+                batchUpdateBtn.innerHTML = '<i class="fas fa-save mr-2"></i>批量保存书柜号';
+            }
+        });
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 });
 </script>
 {% endblock %}
