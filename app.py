@@ -5,7 +5,14 @@ import json
 import time
 import secrets
 import requests
-from flask import Flask, render_template, request, redirect, url_for, flash, abort, Response, stream_with_context, jsonify, session
+import re
+import barcode
+from barcode.writer import ImageWriter
+from docx import Document
+from docx.shared import Inches, Pt, Cm
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.table import WD_TABLE_ALIGNMENT
+from flask import Flask, render_template, request, redirect, url_for, flash, abort, Response, stream_with_context, jsonify, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -250,12 +257,149 @@ class ApiUsage(db.Model):
     count = db.Column(db.Integer, default=0)
     __table_args__ = (db.UniqueConstraint('user_id', 'api_name', 'usage_date', name='_user_api_date_uc'),)
 
+
+# --- 图书贴纸与上架功能模型 ---
+class PendingBook(db.Model):
+    """待上架新书表 - 管理员上传的待处理图书"""
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False, index=True)
+    publisher = db.Column(db.String(200), nullable=True)
+    isbn = db.Column(db.String(20), nullable=False, index=True)
+    is_series = db.Column(db.Boolean, default=False)  # 是否为丛书
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)  # 是否激活（未被完全入库）
+
+
+class ShelvingTask(db.Model):
+    """上架工作任务表 - 师生的工作记录"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    status = db.Column(db.String(20), default='in_progress')  # in_progress, printed, completed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    items = db.relationship('ShelvingItem', backref='task', lazy='dynamic', cascade="all, delete-orphan")
+    user = db.relationship('User', backref='shelving_tasks')
+
+
+class ShelvingItem(db.Model):
+    """上架条目表 - 具体的图书上架记录"""
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('shelving_task.id'), nullable=False)
+    pending_book_id = db.Column(db.Integer, db.ForeignKey('pending_book.id'), nullable=False)
+    book_code = db.Column(db.String(50), nullable=False, index=True)  # 自动生成的图书编码
+    series_count = db.Column(db.Integer, default=1)  # 丛书本数（非丛书为1）
+    bookshelf_row = db.Column(db.Integer, nullable=True)  # 第几排
+    bookshelf_col = db.Column(db.Integer, nullable=True)  # 第几柜
+    is_finalized = db.Column(db.Boolean, default=False)  # 是否已正式入库
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    pending_book = db.relationship('PendingBook', backref='shelving_items')
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 def chinese_tokenizer(text):
     return jieba.lcut(text)
+
+
+# --- 图书编码生成辅助函数 ---
+def get_next_book_code():
+    """获取当前年份的下一个可用图书编码（格式：WY年份四位数）"""
+    current_year = datetime.utcnow().year
+    year_suffix = str(current_year)[2:]  # 取年份后两位
+    prefix = f"WY{year_suffix}"
+
+    # 查找数据库中该年份的最大编码
+    # 需要同时查找Book表和ShelvingItem表（未入库的）
+    max_code_in_books = db.session.query(func.max(Book.book_code)).filter(
+        Book.book_code.like(f"{prefix}%")
+    ).scalar()
+
+    max_code_in_shelving = db.session.query(func.max(ShelvingItem.book_code)).filter(
+        ShelvingItem.book_code.like(f"{prefix}%"),
+        ShelvingItem.is_finalized == False
+    ).scalar()
+
+    def extract_number(code):
+        """从编码中提取基础数字部分"""
+        if not code:
+            return 0
+        # 移除前缀WYxx
+        remainder = code[4:]
+        # 提取主编号（可能包含-或/）
+        match = re.match(r'^(\d+)', remainder)
+        if match:
+            return int(match.group(1))
+        return 0
+
+    max_num_books = extract_number(max_code_in_books)
+    max_num_shelving = extract_number(max_code_in_shelving)
+
+    next_num = max(max_num_books, max_num_shelving) + 1
+    return f"{prefix}{next_num:04d}"
+
+
+def get_copy_number(isbn):
+    """获取指定ISBN的下一个副本号"""
+    # 查找该ISBN在Book表中已存在的数量
+    existing_count_in_books = Book.query.filter_by(isbn=isbn).count()
+
+    # 查找该ISBN在ShelvingItem表中已存在的数量（未入库的）
+    existing_count_in_shelving = db.session.query(ShelvingItem).join(PendingBook).filter(
+        PendingBook.isbn == isbn,
+        ShelvingItem.is_finalized == False
+    ).count()
+
+    total = existing_count_in_books + existing_count_in_shelving
+    return total + 1 if total > 0 else 1
+
+
+def generate_book_codes_for_item(pending_book, series_count=1):
+    """为一个上架条目生成图书编码
+
+    Args:
+        pending_book: PendingBook实例
+        series_count: 丛书本数（非丛书为1）
+
+    Returns:
+        list: 生成的编码列表
+    """
+    codes = []
+    copy_num = get_copy_number(pending_book.isbn)
+
+    if pending_book.is_series and series_count > 1:
+        # 丛书情况
+        base_code = get_next_book_code()
+        for i in range(1, series_count + 1):
+            if copy_num > 1:
+                codes.append(f"{base_code}-{i}/{copy_num}")
+            else:
+                codes.append(f"{base_code}-{i}")
+    else:
+        # 单本书情况
+        base_code = get_next_book_code()
+        if copy_num > 1:
+            codes.append(f"{base_code}/{copy_num}")
+        else:
+            codes.append(base_code)
+
+    return codes
+
+
+def generate_barcode_image(code):
+    """生成条形码图片并返回BytesIO对象"""
+    Code128 = barcode.get_barcode_class('code128')
+    rv = io.BytesIO()
+    code128 = Code128(code, writer=ImageWriter())
+    code128.write(rv, options={
+        'module_width': 0.4,
+        'module_height': 15,
+        'font_size': 10,
+        'text_distance': 5,
+        'quiet_zone': 2
+    })
+    rv.seek(0)
+    return rv
 
 # --- API 用量限制装饰器 ---
 def limit_api_usage(api_name, limit=15):
@@ -670,6 +814,599 @@ def text_to_speech():
     except ValueError:
         return jsonify({'error': '语音合成服务返回了无法解析的结果'}), 502
 
+# --- 图书贴纸与上架路由 ---
+@app.route('/shelving')
+@login_required
+def shelving_page():
+    """师生端上架工作页面"""
+    # 获取用户当前未完成的任务
+    current_task = ShelvingTask.query.filter_by(
+        user_id=current_user.id,
+        status='in_progress'
+    ).first()
+
+    # 如果有已打印但未完成的任务，也显示
+    if not current_task:
+        current_task = ShelvingTask.query.filter_by(
+            user_id=current_user.id,
+            status='printed'
+        ).first()
+
+    return render_template('shelving.html', current_task=current_task)
+
+
+@app.route('/shelving/search')
+@login_required
+def shelving_search():
+    """搜索待上架图书"""
+    query = request.args.get('q', '').strip()
+    if not query or len(query) < 1:
+        return jsonify([])
+
+    # 搜索待上架的书籍（按书名模糊搜索或ISBN后四位）
+    results = []
+    pending_books = PendingBook.query.filter(
+        PendingBook.is_active == True
+    )
+
+    # 书名模糊搜索
+    title_filters = build_fuzzy_filters([PendingBook.title], query)
+    if title_filters:
+        title_results = pending_books.filter(or_(*title_filters)).limit(10).all()
+        results.extend(title_results)
+
+    # ISBN搜索（支持任意四位数）
+    if len(query) >= 4 and query.isdigit():
+        isbn_results = pending_books.filter(
+            PendingBook.isbn.contains(query)
+        ).limit(10).all()
+        for book in isbn_results:
+            if book not in results:
+                results.append(book)
+
+    return jsonify([{
+        'id': book.id,
+        'title': book.title,
+        'publisher': book.publisher or '',
+        'isbn': book.isbn,
+        'is_series': book.is_series
+    } for book in results[:10]])
+
+
+@app.route('/shelving/start', methods=['POST'])
+@login_required
+def shelving_start():
+    """开始新的上架工作"""
+    # 检查是否有未完成的任务
+    existing_task = ShelvingTask.query.filter_by(
+        user_id=current_user.id
+    ).filter(ShelvingTask.status.in_(['in_progress', 'printed'])).first()
+
+    if existing_task:
+        return jsonify({
+            'success': True,
+            'task_id': existing_task.id,
+            'message': '已恢复您之前的工作'
+        })
+
+    # 创建新任务
+    new_task = ShelvingTask(user_id=current_user.id)
+    db.session.add(new_task)
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'task_id': new_task.id,
+        'message': '已开始新的上架工作'
+    })
+
+
+@app.route('/shelving/add-book', methods=['POST'])
+@login_required
+def shelving_add_book():
+    """添加图书到待上架列表"""
+    data = request.get_json()
+    pending_book_id = data.get('pending_book_id')
+    series_count = data.get('series_count', 1)
+
+    if not pending_book_id:
+        return jsonify({'success': False, 'message': '请选择要添加的图书'}), 400
+
+    pending_book = PendingBook.query.get(pending_book_id)
+    if not pending_book or not pending_book.is_active:
+        return jsonify({'success': False, 'message': '图书不存在或已下架'}), 404
+
+    # 获取或创建任务
+    task = ShelvingTask.query.filter_by(
+        user_id=current_user.id
+    ).filter(ShelvingTask.status.in_(['in_progress', 'printed'])).first()
+
+    if not task:
+        task = ShelvingTask(user_id=current_user.id)
+        db.session.add(task)
+        db.session.commit()
+
+    # 使用事务锁确保编码唯一性
+    try:
+        with db.session.begin_nested():
+            # 生成图书编码
+            base_code = get_next_book_code()
+            copy_num = get_copy_number(pending_book.isbn)
+
+            # 处理丛书
+            if pending_book.is_series and series_count > 1:
+                codes = []
+                for i in range(1, series_count + 1):
+                    if copy_num > 1:
+                        codes.append(f"{base_code}-{i}/{copy_num}")
+                    else:
+                        codes.append(f"{base_code}-{i}")
+                book_code = ';'.join(codes)
+            else:
+                if copy_num > 1:
+                    book_code = f"{base_code}/{copy_num}"
+                else:
+                    book_code = base_code
+
+            # 创建上架条目
+            item = ShelvingItem(
+                task_id=task.id,
+                pending_book_id=pending_book_id,
+                book_code=book_code,
+                series_count=series_count
+            )
+            db.session.add(item)
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'item': {
+                'id': item.id,
+                'title': pending_book.title,
+                'publisher': pending_book.publisher or '',
+                'isbn': pending_book.isbn,
+                'book_code': book_code,
+                'series_count': series_count,
+                'is_series': pending_book.is_series
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'添加失败: {str(e)}'}), 500
+
+
+@app.route('/shelving/remove-item/<int:item_id>', methods=['POST'])
+@login_required
+def shelving_remove_item(item_id):
+    """移除上架条目"""
+    item = ShelvingItem.query.get_or_404(item_id)
+
+    # 验证权限
+    if item.task.user_id != current_user.id:
+        return jsonify({'success': False, 'message': '无权操作'}), 403
+
+    if item.is_finalized:
+        return jsonify({'success': False, 'message': '已入库的图书无法移除'}), 400
+
+    db.session.delete(item)
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': '已移除'})
+
+
+@app.route('/shelving/get-items')
+@login_required
+def shelving_get_items():
+    """获取当前任务的所有条目"""
+    task = ShelvingTask.query.filter_by(
+        user_id=current_user.id
+    ).filter(ShelvingTask.status.in_(['in_progress', 'printed'])).first()
+
+    if not task:
+        return jsonify({'items': []})
+
+    items = []
+    for item in task.items.filter_by(is_finalized=False).all():
+        items.append({
+            'id': item.id,
+            'title': item.pending_book.title,
+            'publisher': item.pending_book.publisher or '',
+            'isbn': item.pending_book.isbn,
+            'book_code': item.book_code,
+            'series_count': item.series_count,
+            'is_series': item.pending_book.is_series,
+            'bookshelf_row': item.bookshelf_row,
+            'bookshelf_col': item.bookshelf_col
+        })
+
+    return jsonify({
+        'task_id': task.id,
+        'status': task.status,
+        'items': items
+    })
+
+
+@app.route('/shelving/print-stickers', methods=['POST'])
+@login_required
+def shelving_print_stickers():
+    """生成贴纸文档（5x2格式）"""
+    task = ShelvingTask.query.filter_by(
+        user_id=current_user.id
+    ).filter(ShelvingTask.status.in_(['in_progress', 'printed'])).first()
+
+    if not task:
+        return jsonify({'success': False, 'message': '没有进行中的任务'}), 400
+
+    items = task.items.filter_by(is_finalized=False).all()
+    if not items:
+        return jsonify({'success': False, 'message': '没有待打印的图书'}), 400
+
+    # 收集所有需要打印的贴纸数据
+    stickers = []
+    for item in items:
+        codes = item.book_code.split(';')
+        for code in codes:
+            stickers.append({
+                'title': item.pending_book.title,
+                'publisher': item.pending_book.publisher or '',
+                'code': code.strip()
+            })
+
+    # 创建Word文档
+    document = Document()
+
+    # 设置页面边距
+    sections = document.sections
+    for section in sections:
+        section.top_margin = Cm(1)
+        section.bottom_margin = Cm(1)
+        section.left_margin = Cm(1)
+        section.right_margin = Cm(1)
+
+    # 计算需要多少个表格（每个表格5行2列）
+    stickers_per_page = 10
+    num_pages = (len(stickers) + stickers_per_page - 1) // stickers_per_page
+
+    for page_num in range(num_pages):
+        start_idx = page_num * stickers_per_page
+        end_idx = min(start_idx + stickers_per_page, len(stickers))
+        page_stickers = stickers[start_idx:end_idx]
+
+        # 创建5x2表格
+        table = document.add_table(rows=5, cols=2)
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+        # 设置表格宽度
+        for row in table.rows:
+            row.height = Cm(5)
+            for cell in row.cells:
+                cell.width = Cm(9)
+
+        # 填充贴纸内容
+        sticker_idx = 0
+        for row_idx in range(5):
+            for col_idx in range(2):
+                if sticker_idx < len(page_stickers):
+                    sticker = page_stickers[sticker_idx]
+                    cell = table.cell(row_idx, col_idx)
+
+                    # 清空单元格
+                    cell.text = ''
+
+                    # 添加书名
+                    p_title = cell.add_paragraph()
+                    p_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    run_title = p_title.add_run(sticker['title'][:40] + ('...' if len(sticker['title']) > 40 else ''))
+                    run_title.bold = True
+                    run_title.font.size = Pt(10)
+
+                    # 添加出版社
+                    p_pub = cell.add_paragraph()
+                    p_pub.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    run_pub = p_pub.add_run(sticker['publisher'][:30] if sticker['publisher'] else '')
+                    run_pub.font.size = Pt(8)
+
+                    # 生成条形码并添加
+                    try:
+                        barcode_img = generate_barcode_image(sticker['code'])
+                        p_barcode = cell.add_paragraph()
+                        p_barcode.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        run_barcode = p_barcode.add_run()
+                        run_barcode.add_picture(barcode_img, width=Cm(6))
+                    except Exception as e:
+                        # 如果条形码生成失败，只显示编码文字
+                        p_code = cell.add_paragraph()
+                        p_code.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        run_code = p_code.add_run(sticker['code'])
+                        run_code.bold = True
+                        run_code.font.size = Pt(14)
+
+                    # 添加编码文字
+                    p_code_text = cell.add_paragraph()
+                    p_code_text.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    run_code_text = p_code_text.add_run(sticker['code'])
+                    run_code_text.bold = True
+                    run_code_text.font.size = Pt(12)
+
+                sticker_idx += 1
+
+        # 如果不是最后一页，添加分页符
+        if page_num < num_pages - 1:
+            document.add_page_break()
+
+    # 更新任务状态
+    task.status = 'printed'
+    db.session.commit()
+
+    # 保存文档到内存
+    docx_buffer = io.BytesIO()
+    document.save(docx_buffer)
+    docx_buffer.seek(0)
+
+    # 返回文件
+    filename = f"book_stickers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
+    return send_file(
+        docx_buffer,
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+@app.route('/shelving/update-bookshelf', methods=['POST'])
+@login_required
+def shelving_update_bookshelf():
+    """更新书柜号"""
+    data = request.get_json()
+    item_id = data.get('item_id')
+    row = data.get('row')
+    col = data.get('col')
+
+    item = ShelvingItem.query.get_or_404(item_id)
+
+    if item.task.user_id != current_user.id:
+        return jsonify({'success': False, 'message': '无权操作'}), 403
+
+    if item.is_finalized:
+        return jsonify({'success': False, 'message': '已入库的图书无法修改'}), 400
+
+    item.bookshelf_row = row if row else None
+    item.bookshelf_col = col if col else None
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': '书柜号已更新'})
+
+
+@app.route('/shelving/finalize', methods=['POST'])
+@login_required
+def shelving_finalize():
+    """正式入库"""
+    task = ShelvingTask.query.filter_by(
+        user_id=current_user.id
+    ).filter(ShelvingTask.status.in_(['in_progress', 'printed'])).first()
+
+    if not task:
+        return jsonify({'success': False, 'message': '没有进行中的任务'}), 400
+
+    items = task.items.filter_by(is_finalized=False).all()
+    if not items:
+        return jsonify({'success': False, 'message': '没有待入库的图书'}), 400
+
+    finalized_count = 0
+    for item in items:
+        # 生成书柜号
+        if item.bookshelf_row and item.bookshelf_col:
+            bookshelf_number = f"{item.bookshelf_row}排{item.bookshelf_col}柜"
+        else:
+            bookshelf_number = "待定"
+
+        # 处理每个编码
+        codes = item.book_code.split(';')
+        for code in codes:
+            code = code.strip()
+            # 创建Book记录
+            new_book = Book(
+                title=item.pending_book.title,
+                publisher=item.pending_book.publisher,
+                isbn=item.pending_book.isbn,
+                book_code=code,
+                stock=1,
+                quantity_available=1,
+                bookshelf_number=bookshelf_number
+            )
+            db.session.add(new_book)
+            finalized_count += 1
+
+        # 标记为已入库
+        item.is_finalized = True
+
+    # 更新任务状态
+    task.status = 'completed'
+    db.session.commit()
+
+    # 更新AI目录
+    update_ai_catalog_on_startup()
+
+    return jsonify({
+        'success': True,
+        'message': f'成功入库 {finalized_count} 本书籍',
+        'count': finalized_count
+    })
+
+
+@app.route('/shelving/save', methods=['POST'])
+@login_required
+def shelving_save():
+    """保存工作（不入库）"""
+    task = ShelvingTask.query.filter_by(
+        user_id=current_user.id
+    ).filter(ShelvingTask.status.in_(['in_progress', 'printed'])).first()
+
+    if not task:
+        return jsonify({'success': False, 'message': '没有进行中的任务'}), 400
+
+    # 任务状态保持不变，只是确认保存
+    db.session.commit()
+
+    return jsonify({'success': True, 'message': '工作已保存，下次可继续'})
+
+
+@app.route('/shelving/clear-task', methods=['POST'])
+@login_required
+def shelving_clear_task():
+    """清除当前任务（重新开始）"""
+    task = ShelvingTask.query.filter_by(
+        user_id=current_user.id
+    ).filter(ShelvingTask.status.in_(['in_progress', 'printed'])).first()
+
+    if task:
+        # 删除未入库的条目
+        task.items.filter_by(is_finalized=False).delete()
+
+        # 如果任务没有已入库的条目，删除任务
+        if task.items.count() == 0:
+            db.session.delete(task)
+
+    db.session.commit()
+    return jsonify({'success': True, 'message': '已清除当前任务'})
+
+
+# --- 管理员上架管理路由 ---
+@app.route('/admin/pending-books')
+@login_required
+def admin_pending_books():
+    """管理员查看待上架图书列表"""
+    if current_user.role != 'admin':
+        abort(403)
+
+    pending_books = PendingBook.query.filter_by(is_active=True).order_by(PendingBook.created_at.desc()).all()
+    return render_template('admin_pending_books.html', pending_books=pending_books)
+
+
+@app.route('/admin/import-pending-books', methods=['POST'])
+@login_required
+def admin_import_pending_books():
+    """管理员导入待上架新书列表"""
+    if current_user.role != 'admin':
+        abort(403)
+
+    file = request.files.get('pending_book_file')
+    if not file or file.filename == '':
+        flash('未选择任何文件。', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    if not is_allowed_excel_file(file):
+        flash('请上传受支持的 .xlsx 格式文件。', 'danger')
+        return redirect(url_for('admin_dashboard'))
+
+    try:
+        df = pd.read_excel(file)
+        required_columns = {'书名', 'ISBN'}
+        if not required_columns.issubset(df.columns):
+            flash(f'Excel文件必须包含以下列: {", ".join(required_columns)}', 'danger')
+            return redirect(url_for('admin_dashboard'))
+
+        added_count = 0
+        for _, row in df.iterrows():
+            title = str(row['书名']).strip()
+            isbn = str(row['ISBN']).strip()
+
+            if not title or not isbn or title == 'nan' or isbn == 'nan':
+                continue
+
+            publisher = str(row.get('出版社', '')).strip() if '出版社' in df.columns else ''
+            if publisher == 'nan':
+                publisher = ''
+
+            # 检查是否为丛书
+            is_series = False
+            if '是否为丛书' in df.columns:
+                series_val = str(row.get('是否为丛书', '')).strip().lower()
+                is_series = series_val in ['是', '1', 'true', 'yes', 'y']
+
+            # 创建待上架记录
+            pending_book = PendingBook(
+                title=title,
+                publisher=publisher,
+                isbn=isbn,
+                is_series=is_series
+            )
+            db.session.add(pending_book)
+            added_count += 1
+
+        db.session.commit()
+        flash(f'成功导入 {added_count} 本待上架新书。', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'导入失败: {e}', 'danger')
+
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/admin/pending-book/delete/<int:book_id>', methods=['POST'])
+@login_required
+def admin_delete_pending_book(book_id):
+    """删除待上架图书"""
+    if current_user.role != 'admin':
+        abort(403)
+
+    book = PendingBook.query.get_or_404(book_id)
+    book.is_active = False
+    db.session.commit()
+    flash(f'已下架《{book.title}》', 'success')
+    return redirect(url_for('admin_dashboard'))
+
+
+@app.route('/admin/pending-bookshelf')
+@login_required
+def admin_pending_bookshelf():
+    """管理员查看待定书柜号的图书"""
+    if current_user.role != 'admin':
+        abort(403)
+
+    pending_books = Book.query.filter_by(bookshelf_number='待定').order_by(Book.id.desc()).all()
+    return jsonify([{
+        'id': book.id,
+        'title': book.title,
+        'book_code': book.book_code,
+        'publisher': book.publisher or ''
+    } for book in pending_books])
+
+
+@app.route('/admin/batch-update-bookshelf', methods=['POST'])
+@login_required
+def admin_batch_update_bookshelf():
+    """批量更新书柜号"""
+    if current_user.role != 'admin':
+        return jsonify({'success': False, 'message': '无权操作'}), 403
+
+    data = request.get_json()
+    updates = data.get('updates', [])
+
+    updated_count = 0
+    for update in updates:
+        book_id = update.get('id')
+        row = update.get('row')
+        col = update.get('col')
+
+        book = Book.query.get(book_id)
+        if book:
+            if row and col:
+                book.bookshelf_number = f"{row}排{col}柜"
+            else:
+                book.bookshelf_number = "待定"
+            updated_count += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'success': True,
+        'message': f'成功更新 {updated_count} 本书的书柜号',
+        'count': updated_count
+    })
+
+
 # --- 管理员路由 ---
 @app.route('/admin/dashboard')
 @login_required
@@ -689,7 +1426,9 @@ def admin_dashboard():
     if filters['status'] != 'all': query = query.filter(BorrowRecord.status == filters['status'])
     page = request.args.get('page', 1, type=int)
     records_pagination = query.order_by(BorrowRecord.borrow_date.desc()).paginate(page=page, per_page=15, error_out=False)
-    return render_template('admin_dashboard.html', books=books, faculty_users=faculty_users, wants_list=wants_query, records_pagination=records_pagination, filters=filters)
+    # 获取待上架图书列表
+    pending_books = PendingBook.query.filter_by(is_active=True).order_by(PendingBook.created_at.desc()).all()
+    return render_template('admin_dashboard.html', books=books, faculty_users=faculty_users, wants_list=wants_query, records_pagination=records_pagination, filters=filters, pending_books=pending_books)
 
 @app.route('/admin/update-ai-catalog', methods=['POST'])
 @login_required

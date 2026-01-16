@@ -1,0 +1,563 @@
+{% extends "layout.html" %}
+
+{% block title %}图书贴纸与上架 - 资料室共建{% endblock %}
+
+{% block content %}
+<div class="fluent-card mb-6">
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
+        <div>
+            <h1 class="text-xl sm:text-2xl font-bold text-gray-800">
+                <i class="fas fa-tags text-theme-primary mr-2"></i>图书贴纸与上架
+            </h1>
+            <p class="text-sm text-gray-500 mt-1">资料室共建 - 感谢您的参与</p>
+        </div>
+        <div class="flex gap-2">
+            <button id="startWorkBtn" class="bg-theme-primary text-white px-4 py-2 hover:bg-theme-primary-dark fluent-btn text-sm">
+                <i class="fas fa-play mr-2"></i>开始工作
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+    <!-- 左侧：搜索待上架图书 -->
+    <div class="fluent-card">
+        <h2 class="text-lg font-semibold text-gray-800 mb-4">
+            <i class="fas fa-search text-blue-500 mr-2"></i>搜索待上架图书
+        </h2>
+
+        <div class="relative mb-4">
+            <input type="text" id="searchInput"
+                placeholder="输入书名或ISBN后四位搜索..."
+                class="w-full px-4 py-3 pr-10 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/50 text-sm"
+                autocomplete="off">
+            <i class="fas fa-search absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+        </div>
+
+        <!-- 搜索结果列表 -->
+        <div id="searchResults" class="space-y-2 max-h-96 overflow-y-auto hidden">
+            <!-- 动态填充 -->
+        </div>
+
+        <div id="searchPlaceholder" class="text-center py-8 text-gray-400">
+            <i class="fas fa-book-open text-4xl mb-3 opacity-50"></i>
+            <p class="text-sm">请输入书名或ISBN进行搜索</p>
+            <p class="text-xs mt-1">支持书名模糊搜索和ISBN任意四位数</p>
+        </div>
+
+        <!-- 丛书本数输入弹窗 -->
+        <div id="seriesModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+            <div class="fluent-card w-full max-w-sm mx-4">
+                <h3 class="text-lg font-medium mb-4">
+                    <i class="fas fa-layer-group text-purple-500 mr-2"></i>输入丛书本数
+                </h3>
+                <p id="seriesBookTitle" class="text-sm text-gray-600 mb-4"></p>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium mb-2">请输入该丛书包含的本数：</label>
+                    <input type="number" id="seriesCountInput" min="1" value="2"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-theme-primary/50">
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button id="cancelSeriesBtn" class="bg-gray-200 hover:bg-gray-300 px-4 py-2 fluent-btn text-sm">
+                        取消
+                    </button>
+                    <button id="confirmSeriesBtn" class="bg-theme-primary text-white px-4 py-2 hover:bg-theme-primary-dark fluent-btn text-sm">
+                        确认添加
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧：待上架图书列表 -->
+    <div class="fluent-card">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-lg font-semibold text-gray-800">
+                <i class="fas fa-list text-green-500 mr-2"></i>待上架图书
+                <span id="itemCount" class="text-sm font-normal text-gray-500 ml-2">(0本)</span>
+            </h2>
+            <button id="clearTaskBtn" class="text-red-500 hover:text-red-600 text-sm">
+                <i class="fas fa-trash mr-1"></i>清空
+            </button>
+        </div>
+
+        <div id="shelvingItems" class="space-y-3 max-h-80 overflow-y-auto mb-4">
+            <!-- 动态填充 -->
+        </div>
+
+        <div id="emptyPlaceholder" class="text-center py-8 text-gray-400">
+            <i class="fas fa-inbox text-4xl mb-3 opacity-50"></i>
+            <p class="text-sm">暂无待上架图书</p>
+            <p class="text-xs mt-1">从左侧搜索并添加图书</p>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div id="actionButtons" class="hidden border-t pt-4 space-y-3">
+            <button id="printStickersBtn" class="w-full bg-blue-600 text-white px-4 py-3 hover:bg-blue-700 fluent-btn">
+                <i class="fas fa-print mr-2"></i>打印贴纸
+            </button>
+
+            <div id="bookshelfSection" class="hidden">
+                <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-3">
+                    <p class="text-sm text-yellow-800">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        贴纸已打印！请完成上架工作后填写书柜号。
+                    </p>
+                </div>
+
+                <div class="flex gap-2">
+                    <button id="saveWorkBtn" class="flex-1 bg-gray-600 text-white px-4 py-2 hover:bg-gray-700 fluent-btn text-sm">
+                        <i class="fas fa-save mr-2"></i>保存工作
+                    </button>
+                    <button id="finalizeBtn" class="flex-1 bg-green-600 text-white px-4 py-2 hover:bg-green-700 fluent-btn text-sm">
+                        <i class="fas fa-check-double mr-2"></i>正式入库
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 提示信息 -->
+<div class="fluent-card mt-6">
+    <h3 class="text-sm font-medium text-gray-700 mb-2">
+        <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>使用说明
+    </h3>
+    <ul class="text-xs text-gray-500 space-y-1">
+        <li><i class="fas fa-check text-green-500 mr-1"></i> 点击"开始工作"进入工作模式</li>
+        <li><i class="fas fa-check text-green-500 mr-1"></i> 搜索并添加待上架的图书，系统会自动分配编码</li>
+        <li><i class="fas fa-check text-green-500 mr-1"></i> 点击"打印贴纸"生成Word文档，打印并贴在书上</li>
+        <li><i class="fas fa-check text-green-500 mr-1"></i> 完成上架后，填写书柜号并点击"正式入库"</li>
+        <li><i class="fas fa-info-circle text-blue-500 mr-1"></i> 可以随时保存工作，下次继续</li>
+    </ul>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+    let currentTask = null;
+    let pendingSeriesBook = null;
+
+    // 元素引用
+    const searchInput = document.getElementById('searchInput');
+    const searchResults = document.getElementById('searchResults');
+    const searchPlaceholder = document.getElementById('searchPlaceholder');
+    const shelvingItems = document.getElementById('shelvingItems');
+    const emptyPlaceholder = document.getElementById('emptyPlaceholder');
+    const actionButtons = document.getElementById('actionButtons');
+    const bookshelfSection = document.getElementById('bookshelfSection');
+    const itemCount = document.getElementById('itemCount');
+    const seriesModal = document.getElementById('seriesModal');
+    const seriesCountInput = document.getElementById('seriesCountInput');
+    const seriesBookTitle = document.getElementById('seriesBookTitle');
+
+    // 开始工作
+    document.getElementById('startWorkBtn').addEventListener('click', async function() {
+        try {
+            const response = await fetch('/shelving/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                currentTask = { id: data.task_id };
+                showNotification(data.message, 'success');
+                loadItems();
+            }
+        } catch (error) {
+            showNotification('操作失败', 'error');
+        }
+    });
+
+    // 搜索防抖
+    let searchTimeout;
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value.trim();
+
+        if (query.length < 1) {
+            searchResults.classList.add('hidden');
+            searchPlaceholder.classList.remove('hidden');
+            return;
+        }
+
+        searchTimeout = setTimeout(async () => {
+            try {
+                const response = await fetch(`/shelving/search?q=${encodeURIComponent(query)}`);
+                const results = await response.json();
+                renderSearchResults(results);
+            } catch (error) {
+                console.error('搜索失败:', error);
+            }
+        }, 300);
+    });
+
+    // 渲染搜索结果
+    function renderSearchResults(results) {
+        if (results.length === 0) {
+            searchResults.innerHTML = '<div class="text-center py-4 text-gray-500 text-sm">未找到相关图书</div>';
+        } else {
+            searchResults.innerHTML = results.map(book => `
+                <div class="bg-gray-50 p-3 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer flex justify-between items-center"
+                    onclick="addBook(${book.id}, '${escapeHtml(book.title)}', ${book.is_series})">
+                    <div class="flex-1 min-w-0">
+                        <div class="font-medium text-gray-900 text-sm truncate">${escapeHtml(book.title)}</div>
+                        <div class="text-xs text-gray-500">
+                            ${book.publisher ? escapeHtml(book.publisher) + ' | ' : ''}ISBN: ${escapeHtml(book.isbn)}
+                            ${book.is_series ? '<span class="text-purple-600 ml-1"><i class="fas fa-layer-group"></i> 丛书</span>' : ''}
+                        </div>
+                    </div>
+                    <button class="bg-theme-primary text-white px-3 py-1.5 rounded-lg hover:bg-theme-primary-dark text-xs ml-2 flex-shrink-0">
+                        <i class="fas fa-plus mr-1"></i>添加
+                    </button>
+                </div>
+            `).join('');
+        }
+        searchResults.classList.remove('hidden');
+        searchPlaceholder.classList.add('hidden');
+    }
+
+    // 添加图书（全局函数）
+    window.addBook = async function(bookId, title, isSeries) {
+        if (isSeries) {
+            // 丛书需要输入本数
+            pendingSeriesBook = { id: bookId, title: title };
+            seriesBookTitle.textContent = `《${title}》`;
+            seriesCountInput.value = 2;
+            seriesModal.classList.remove('hidden');
+            return;
+        }
+
+        await doAddBook(bookId, 1);
+    };
+
+    // 确认丛书本数
+    document.getElementById('confirmSeriesBtn').addEventListener('click', async function() {
+        if (pendingSeriesBook) {
+            const count = parseInt(seriesCountInput.value) || 1;
+            await doAddBook(pendingSeriesBook.id, count);
+            seriesModal.classList.add('hidden');
+            pendingSeriesBook = null;
+        }
+    });
+
+    document.getElementById('cancelSeriesBtn').addEventListener('click', function() {
+        seriesModal.classList.add('hidden');
+        pendingSeriesBook = null;
+    });
+
+    // 执行添加
+    async function doAddBook(bookId, seriesCount) {
+        try {
+            const response = await fetch('/shelving/add-book', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    pending_book_id: bookId,
+                    series_count: seriesCount
+                })
+            });
+            const data = await response.json();
+            if (data.success) {
+                showNotification('已添加图书', 'success');
+                loadItems();
+            } else {
+                showNotification(data.message || '添加失败', 'error');
+            }
+        } catch (error) {
+            showNotification('操作失败', 'error');
+        }
+    }
+
+    // 加载条目
+    async function loadItems() {
+        try {
+            const response = await fetch('/shelving/get-items');
+            const data = await response.json();
+
+            if (data.items && data.items.length > 0) {
+                currentTask = { id: data.task_id, status: data.status };
+                renderItems(data.items);
+                emptyPlaceholder.classList.add('hidden');
+                actionButtons.classList.remove('hidden');
+                itemCount.textContent = `(${data.items.length}本)`;
+
+                // 根据状态显示书柜号部分
+                if (data.status === 'printed') {
+                    bookshelfSection.classList.remove('hidden');
+                }
+            } else {
+                shelvingItems.innerHTML = '';
+                emptyPlaceholder.classList.remove('hidden');
+                actionButtons.classList.add('hidden');
+                itemCount.textContent = '(0本)';
+            }
+        } catch (error) {
+            console.error('加载失败:', error);
+        }
+    }
+
+    // 渲染条目列表
+    function renderItems(items) {
+        shelvingItems.innerHTML = items.map(item => {
+            const codes = item.book_code.split(';');
+            const showBookshelf = currentTask && currentTask.status === 'printed';
+
+            return `
+                <div class="bg-gray-50 p-3 rounded-lg border border-gray-200" data-item-id="${item.id}">
+                    <div class="flex justify-between items-start mb-2">
+                        <div class="flex-1 min-w-0">
+                            <div class="font-medium text-gray-900 text-sm">${escapeHtml(item.title)}</div>
+                            <div class="text-xs text-gray-500">${item.publisher ? escapeHtml(item.publisher) : ''}</div>
+                        </div>
+                        <button onclick="removeItem(${item.id})" class="text-red-500 hover:text-red-600 text-xs ml-2">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="text-xs space-y-1">
+                        <div><span class="text-gray-500">ISBN:</span> <span class="font-mono">${escapeHtml(item.isbn)}</span></div>
+                        <div><span class="text-gray-500">编码:</span>
+                            <span class="font-mono text-theme-primary font-medium">
+                                ${codes.map(c => escapeHtml(c.trim())).join('<br>')}
+                            </span>
+                        </div>
+                        ${showBookshelf ? `
+                            <div class="mt-2 pt-2 border-t border-gray-200">
+                                <span class="text-gray-500">书柜号:</span>
+                                <div class="flex gap-2 mt-1">
+                                    <select class="bookshelf-row flex-1 px-2 py-1 border border-gray-300 rounded text-xs"
+                                        onchange="updateBookshelf(${item.id})">
+                                        <option value="">第几排</option>
+                                        ${[1,2,3,4,5,6,7,8,9,10].map(n =>
+                                            `<option value="${n}" ${item.bookshelf_row == n ? 'selected' : ''}>第${n}排</option>`
+                                        ).join('')}
+                                    </select>
+                                    <select class="bookshelf-col flex-1 px-2 py-1 border border-gray-300 rounded text-xs"
+                                        onchange="updateBookshelf(${item.id})">
+                                        <option value="">第几柜</option>
+                                        ${[1,2,3,4,5,6,7,8,9,10].map(n =>
+                                            `<option value="${n}" ${item.bookshelf_col == n ? 'selected' : ''}>第${n}柜</option>`
+                                        ).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // 移除条目（全局函数）
+    window.removeItem = async function(itemId) {
+        if (!confirm('确定要移除这本书吗？')) return;
+
+        try {
+            const response = await fetch(`/shelving/remove-item/${itemId}`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                loadItems();
+            } else {
+                showNotification(data.message || '移除失败', 'error');
+            }
+        } catch (error) {
+            showNotification('操作失败', 'error');
+        }
+    };
+
+    // 更新书柜号（全局函数）
+    window.updateBookshelf = async function(itemId) {
+        const itemEl = document.querySelector(`[data-item-id="${itemId}"]`);
+        const row = itemEl.querySelector('.bookshelf-row').value;
+        const col = itemEl.querySelector('.bookshelf-col').value;
+
+        try {
+            const response = await fetch('/shelving/update-bookshelf', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    item_id: itemId,
+                    row: row ? parseInt(row) : null,
+                    col: col ? parseInt(col) : null
+                })
+            });
+            const data = await response.json();
+            if (!data.success) {
+                showNotification(data.message || '更新失败', 'error');
+            }
+        } catch (error) {
+            showNotification('操作失败', 'error');
+        }
+    };
+
+    // 打印贴纸
+    document.getElementById('printStickersBtn').addEventListener('click', async function() {
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>生成中...';
+
+        try {
+            const response = await fetch('/shelving/print-stickers', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `book_stickers_${new Date().toISOString().slice(0,10)}.docx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+
+                showNotification('贴纸文档已下载', 'success');
+
+                // 刷新显示书柜号部分
+                loadItems();
+                bookshelfSection.classList.remove('hidden');
+            } else {
+                const data = await response.json();
+                showNotification(data.message || '生成失败', 'error');
+            }
+        } catch (error) {
+            showNotification('操作失败', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-print mr-2"></i>打印贴纸';
+        }
+    });
+
+    // 保存工作
+    document.getElementById('saveWorkBtn').addEventListener('click', async function() {
+        try {
+            const response = await fetch('/shelving/save', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            const data = await response.json();
+            showNotification(data.message, data.success ? 'success' : 'error');
+        } catch (error) {
+            showNotification('保存失败', 'error');
+        }
+    });
+
+    // 正式入库
+    document.getElementById('finalizeBtn').addEventListener('click', async function() {
+        if (!confirm('确定要正式入库吗？入库后图书将可以被借阅。')) return;
+
+        const btn = this;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>入库中...';
+
+        try {
+            const response = await fetch('/shelving/finalize', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showNotification(data.message, 'success');
+                // 重置页面
+                shelvingItems.innerHTML = '';
+                emptyPlaceholder.classList.remove('hidden');
+                actionButtons.classList.add('hidden');
+                bookshelfSection.classList.add('hidden');
+                itemCount.textContent = '(0本)';
+                currentTask = null;
+            } else {
+                showNotification(data.message || '入库失败', 'error');
+            }
+        } catch (error) {
+            showNotification('操作失败', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-double mr-2"></i>正式入库';
+        }
+    });
+
+    // 清空任务
+    document.getElementById('clearTaskBtn').addEventListener('click', async function() {
+        if (!confirm('确定要清空当前任务吗？所有未入库的图书将被移除。')) return;
+
+        try {
+            const response = await fetch('/shelving/clear-task', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': csrfToken
+                }
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                showNotification('已清空任务', 'success');
+                shelvingItems.innerHTML = '';
+                emptyPlaceholder.classList.remove('hidden');
+                actionButtons.classList.add('hidden');
+                bookshelfSection.classList.add('hidden');
+                itemCount.textContent = '(0本)';
+                currentTask = null;
+            }
+        } catch (error) {
+            showNotification('操作失败', 'error');
+        }
+    });
+
+    // 工具函数
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function showNotification(message, type) {
+        // 创建通知元素
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 text-white text-sm max-w-xs ${
+            type === 'success' ? 'bg-green-500' :
+            type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+        }`;
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle'} mr-2"></i>
+                <span>${escapeHtml(message)}</span>
+            </div>
+        `;
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            notification.style.transition = 'opacity 0.3s';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    // 页面加载时检查是否有未完成的任务
+    loadItems();
+});
+</script>
+{% endblock %}
