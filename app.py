@@ -18,7 +18,7 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, curren
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from sqlalchemy import or_, func, desc, asc
-from sqlalchemy.exc import NoResultFound
+from sqlalchemy.exc import NoResultFound, IntegrityError
 from datetime import datetime, timedelta, date
 from openai import OpenAI
 import jieba
@@ -286,13 +286,21 @@ class ShelvingItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     task_id = db.Column(db.Integer, db.ForeignKey('shelving_task.id'), nullable=False)
     pending_book_id = db.Column(db.Integer, db.ForeignKey('pending_book.id'), nullable=False)
-    book_code = db.Column(db.String(50), nullable=False, index=True)  # 自动生成的图书编码
+    book_code = db.Column(db.String(50), nullable=False, unique=True, index=True)  # 自动生成的图书编码，添加唯一约束
     series_count = db.Column(db.Integer, default=1)  # 丛书本数（非丛书为1）
     bookshelf_row = db.Column(db.Integer, nullable=True)  # 第几排
     bookshelf_col = db.Column(db.Integer, nullable=True)  # 第几柜
     is_finalized = db.Column(db.Boolean, default=False)  # 是否已正式入库
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     pending_book = db.relationship('PendingBook', backref='shelving_items')
+
+
+class BookCodeSequence(db.Model):
+    """图书编码序列表 - 用于原子性地生成唯一编码"""
+    id = db.Column(db.Integer, primary_key=True)
+    year_prefix = db.Column(db.String(10), unique=True, nullable=False)  # 如 "WY26"
+    current_number = db.Column(db.Integer, default=0, nullable=False)  # 当前最大编号
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -303,40 +311,95 @@ def chinese_tokenizer(text):
 
 
 # --- 图书编码生成辅助函数 ---
-def get_next_book_code():
-    """获取当前年份的下一个可用图书编码（格式：WY年份四位数）"""
+def initialize_book_code_sequence():
+    """初始化图书编码序列表，从现有数据中同步最大编号"""
     current_year = datetime.utcnow().year
-    year_suffix = str(current_year)[2:]  # 取年份后两位
+    year_suffix = str(current_year)[2:]
     prefix = f"WY{year_suffix}"
-
-    # 查找数据库中该年份的最大编码
-    # 需要同时查找Book表和ShelvingItem表（未入库的）
-    max_code_in_books = db.session.query(func.max(Book.book_code)).filter(
-        Book.book_code.like(f"{prefix}%")
-    ).scalar()
-
-    max_code_in_shelving = db.session.query(func.max(ShelvingItem.book_code)).filter(
-        ShelvingItem.book_code.like(f"{prefix}%"),
-        ShelvingItem.is_finalized == False
-    ).scalar()
 
     def extract_number(code):
         """从编码中提取基础数字部分"""
         if not code:
             return 0
-        # 移除前缀WYxx
         remainder = code[4:]
-        # 提取主编号（可能包含-或/）
         match = re.match(r'^(\d+)', remainder)
         if match:
             return int(match.group(1))
         return 0
 
-    max_num_books = extract_number(max_code_in_books)
-    max_num_shelving = extract_number(max_code_in_shelving)
+    # 查找现有最大编码
+    max_code_in_books = db.session.query(func.max(Book.book_code)).filter(
+        Book.book_code.like(f"{prefix}%")
+    ).scalar()
 
-    next_num = max(max_num_books, max_num_shelving) + 1
+    max_code_in_shelving = db.session.query(func.max(ShelvingItem.book_code)).filter(
+        ShelvingItem.book_code.like(f"{prefix}%")
+    ).scalar()
+
+    max_num = max(extract_number(max_code_in_books), extract_number(max_code_in_shelving))
+
+    # 检查序列表是否存在记录
+    seq = BookCodeSequence.query.filter_by(year_prefix=prefix).first()
+    if not seq:
+        seq = BookCodeSequence(year_prefix=prefix, current_number=max_num)
+        db.session.add(seq)
+    elif seq.current_number < max_num:
+        seq.current_number = max_num
+
+    db.session.commit()
+    return seq.current_number
+
+
+def get_next_book_code_atomic():
+    """原子性地获取下一个图书编码（使用悲观锁）
+
+    使用数据库行级锁确保在并发环境下生成唯一编码。
+    """
+    current_year = datetime.utcnow().year
+    year_suffix = str(current_year)[2:]
+    prefix = f"WY{year_suffix}"
+
+    # 使用 with_for_update() 获取排他锁
+    seq = db.session.query(BookCodeSequence).filter_by(
+        year_prefix=prefix
+    ).with_for_update().first()
+
+    if not seq:
+        # 如果序列不存在，需要初始化
+        # 先查找现有最大编码
+        def extract_number(code):
+            if not code:
+                return 0
+            remainder = code[4:]
+            match = re.match(r'^(\d+)', remainder)
+            if match:
+                return int(match.group(1))
+            return 0
+
+        max_code_in_books = db.session.query(func.max(Book.book_code)).filter(
+            Book.book_code.like(f"{prefix}%")
+        ).scalar()
+
+        max_code_in_shelving = db.session.query(func.max(ShelvingItem.book_code)).filter(
+            ShelvingItem.book_code.like(f"{prefix}%")
+        ).scalar()
+
+        max_num = max(extract_number(max_code_in_books), extract_number(max_code_in_shelving))
+
+        seq = BookCodeSequence(year_prefix=prefix, current_number=max_num)
+        db.session.add(seq)
+        db.session.flush()  # 确保seq有id
+
+    # 原子性递增
+    seq.current_number += 1
+    next_num = seq.current_number
+
     return f"{prefix}{next_num:04d}"
+
+
+def get_next_book_code():
+    """获取下一个图书编码（兼容旧接口，实际调用原子版本）"""
+    return get_next_book_code_atomic()
 
 
 def get_copy_number(isbn):
@@ -904,7 +967,13 @@ def shelving_start():
 @app.route('/shelving/add-book', methods=['POST'])
 @login_required
 def shelving_add_book():
-    """添加图书到待上架列表"""
+    """添加图书到待上架列表
+
+    使用重试机制处理并发冲突：
+    - 最多重试3次
+    - 每次重试时重新生成编码
+    - 如果仍然失败，返回错误信息
+    """
     data = request.get_json()
     pending_book_id = data.get('pending_book_id')
     series_count = data.get('series_count', 1)
@@ -926,54 +995,75 @@ def shelving_add_book():
         db.session.add(task)
         db.session.commit()
 
-    # 使用事务锁确保编码唯一性
-    try:
-        with db.session.begin_nested():
-            # 生成图书编码
-            base_code = get_next_book_code()
-            copy_num = get_copy_number(pending_book.isbn)
+    # 使用重试机制确保编码唯一性
+    max_retries = 3
+    last_error = None
 
-            # 处理丛书
-            if pending_book.is_series and series_count > 1:
-                codes = []
-                for i in range(1, series_count + 1):
-                    if copy_num > 1:
-                        codes.append(f"{base_code}-{i}/{copy_num}")
-                    else:
-                        codes.append(f"{base_code}-{i}")
-                book_code = ';'.join(codes)
-            else:
-                if copy_num > 1:
-                    book_code = f"{base_code}/{copy_num}"
+    for attempt in range(max_retries):
+        try:
+            # 开始嵌套事务
+            with db.session.begin_nested():
+                # 原子性地生成图书编码
+                base_code = get_next_book_code_atomic()
+                copy_num = get_copy_number(pending_book.isbn)
+
+                # 处理丛书
+                if pending_book.is_series and series_count > 1:
+                    codes = []
+                    for i in range(1, series_count + 1):
+                        if copy_num > 1:
+                            codes.append(f"{base_code}-{i}/{copy_num}")
+                        else:
+                            codes.append(f"{base_code}-{i}")
+                    book_code = ';'.join(codes)
                 else:
-                    book_code = base_code
+                    if copy_num > 1:
+                        book_code = f"{base_code}/{copy_num}"
+                    else:
+                        book_code = base_code
 
-            # 创建上架条目
-            item = ShelvingItem(
-                task_id=task.id,
-                pending_book_id=pending_book_id,
-                book_code=book_code,
-                series_count=series_count
-            )
-            db.session.add(item)
+                # 创建上架条目
+                item = ShelvingItem(
+                    task_id=task.id,
+                    pending_book_id=pending_book_id,
+                    book_code=book_code,
+                    series_count=series_count
+                )
+                db.session.add(item)
 
-        db.session.commit()
+            # 提交事务
+            db.session.commit()
 
-        return jsonify({
-            'success': True,
-            'item': {
-                'id': item.id,
-                'title': pending_book.title,
-                'publisher': pending_book.publisher or '',
-                'isbn': pending_book.isbn,
-                'book_code': book_code,
-                'series_count': series_count,
-                'is_series': pending_book.is_series
-            }
-        })
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'message': f'添加失败: {str(e)}'}), 500
+            return jsonify({
+                'success': True,
+                'item': {
+                    'id': item.id,
+                    'title': pending_book.title,
+                    'publisher': pending_book.publisher or '',
+                    'isbn': pending_book.isbn,
+                    'book_code': book_code,
+                    'series_count': series_count,
+                    'is_series': pending_book.is_series
+                }
+            })
+
+        except IntegrityError as e:
+            # 唯一约束冲突，回滚并重试
+            db.session.rollback()
+            last_error = e
+            app.logger.warning(f'编码冲突，正在重试 (尝试 {attempt + 1}/{max_retries}): {str(e)}')
+            # 短暂等待后重试
+            time.sleep(0.1 * (attempt + 1))
+            continue
+
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f'添加图书失败: {str(e)}')
+            return jsonify({'success': False, 'message': f'添加失败: {str(e)}'}), 500
+
+    # 所有重试都失败
+    app.logger.error(f'添加图书失败，已重试{max_retries}次: {str(last_error)}')
+    return jsonify({'success': False, 'message': '系统繁忙，请稍后重试'}), 503
 
 
 @app.route('/shelving/remove-item/<int:item_id>', methods=['POST'])
@@ -1794,6 +1884,15 @@ def init_database():
             print(f"Error importing users: {e}")
         
         db.session.commit()
+
+        # 初始化图书编码序列
+        print("Initializing book code sequence...")
+        try:
+            initialize_book_code_sequence()
+            print("Book code sequence initialized.")
+        except Exception as e:
+            print(f"Warning: Failed to initialize book code sequence: {e}")
+
         print("Initializing AI Catalog for the first time...")
         with app.test_request_context():
             update_ai_catalog_on_startup()
