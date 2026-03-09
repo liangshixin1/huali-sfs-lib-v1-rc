@@ -65,8 +65,8 @@
         </div>
         <div class="mt-4 space-y-4">
             <div id="secure-context-warning" class="hidden text-sm text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"></div>
-            <div class="rounded-xl overflow-hidden bg-black/90">
-                <video id="scan-video" class="w-full h-64 object-cover bg-black" playsinline muted></video>
+            <div class="rounded-xl overflow-hidden bg-black/90 relative">
+                <div id="reader" class="w-full h-64 bg-black"></div>
             </div>
             <p id="scan-status" class="text-sm text-gray-600 dark:text-gray-300"></p>
             <button id="restart-scan" type="button" class="hidden w-full bg-theme-primary text-white px-4 py-2 rounded-lg hover:bg-theme-primary-dark transition-colors">重新扫码</button>
@@ -1751,6 +1751,9 @@ document.addEventListener('DOMContentLoaded', () => {
 {% block extra_scripts %}
 {{ super() }}
 {% if current_user.role == 'faculty' %}
+<script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+{% endif %}
+{% if current_user.role == 'faculty' %}
 <script>
 (function() {
     const scanModal = document.getElementById('scan-modal');
@@ -1765,7 +1768,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {})
     });
 
-    const video = document.getElementById('scan-video');
     const statusEl = document.getElementById('scan-status');
     const secureWarning = document.getElementById('secure-context-warning');
     const manualEntry = document.getElementById('manual-entry');
@@ -1782,9 +1784,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     let currentMode = 'borrow';
-    let stream = null;
-    let detectionTimer = null;
-    let detector = null;
+    let html5QrCode = null;
     let isProcessing = false;
 
     function setStatus(message, type = 'info') {
@@ -1816,91 +1816,45 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        if (!('mediaDevices' in navigator) || typeof navigator.mediaDevices.getUserMedia !== 'function') {
-            setStatus('当前浏览器不支持摄像头调用，请使用下方输入框手动录入图书编码。', 'error');
-            prepareManualEntry();
-            return;
-        }
-
-        if (!('BarcodeDetector' in window)) {
-            setStatus('检测到浏览器暂不支持原生扫码功能，请使用下方输入框手动录入图书编码。', 'error');
+        if (typeof Html5Qrcode === 'undefined') {
+            setStatus('扫码库加载失败，请使用下方输入框手动录入图书编码。', 'error');
             prepareManualEntry();
             return;
         }
 
         try {
-            const preferredFormats = ['qr_code', 'code_128', 'code_39', 'ean_13'];
-            let formats = preferredFormats;
-            if (typeof BarcodeDetector.getSupportedFormats === 'function') {
-                const supported = await BarcodeDetector.getSupportedFormats();
-                const filtered = preferredFormats.filter(f => supported.includes(f));
-                if (filtered.length > 0) {
-                    formats = filtered;
-                }
-                console.log('[扫码] 设备支持格式:', supported, '| 实际使用格式:', formats);
-            }
-            detector = new BarcodeDetector({ formats });
-        } catch (detectorError) {
-            console.error('初始化识别器失败', detectorError);
-            setStatus('初始化扫码识别器失败，请使用下方输入框手动录入。', 'error');
-            prepareManualEntry();
-            return;
-        }
-
-        try {
-            stream = await navigator.mediaDevices.getUserMedia({
-                video: {
-                    facingMode: { ideal: 'environment' },
-                    width: { ideal: 1280 },
-                    height: { ideal: 720 }
+            html5QrCode = new Html5Qrcode('reader');
+            await html5QrCode.start(
+                { facingMode: 'environment' },
+                {
+                    fps: 10,
+                    qrbox: { width: 250, height: 100 },
+                    formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ]
                 },
-                audio: false
-            });
-            video.srcObject = stream;
-            await video.play();
-            setStatus('请将图码对准取景框以完成扫码。');
-
-            detectionTimer = window.setInterval(async () => {
-                if (isProcessing || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-                    return;
-                }
-
-                try {
-                    const barcodes = await detector.detect(video);
-                    if (!barcodes.length) {
-                        return;
-                    }
-
-                    const value = (barcodes[0].rawValue || '').trim();
-                    if (!value) {
-                        return;
-                    }
-
+                async (decodedText) => {
+                    if (isProcessing) return;
                     isProcessing = true;
-                    await handleScannedCode(value);
-                } catch (detectError) {
-                    console.error('扫码识别失败', detectError);
-                }
-            }, 700);
+                    await handleScannedCode(decodedText.trim());
+                },
+                () => { /* 未扫到时静默忽略 */ }
+            );
+            setStatus('请将条形码对准取景框中央。');
         } catch (cameraError) {
-            console.error('摄像头访问失败', cameraError);
+            console.error('摄像头启动失败', cameraError);
             setStatus(`无法访问摄像头：${cameraError.message || cameraError}`, 'error');
             prepareManualEntry();
         }
     }
 
-    function stopScanner() {
-        if (detectionTimer) {
-            window.clearInterval(detectionTimer);
-            detectionTimer = null;
-        }
-        if (video) {
-            video.pause();
-            video.srcObject = null;
-        }
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-            stream = null;
+    async function stopScanner() {
+        if (html5QrCode) {
+            try {
+                await html5QrCode.stop();
+            } catch (_) { /* 已停止则忽略 */ }
+            try {
+                html5QrCode.clear();
+            } catch (_) { /* 忽略 */ }
+            html5QrCode = null;
         }
         isProcessing = false;
     }
