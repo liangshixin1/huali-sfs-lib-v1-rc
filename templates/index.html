@@ -1829,7 +1829,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
-            detector = new BarcodeDetector({ formats: ['qr_code', 'code_128', 'code_39', 'ean_13'] });
+            const preferredFormats = ['qr_code', 'code_128', 'code_39', 'ean_13'];
+            let formats = preferredFormats;
+            if (typeof BarcodeDetector.getSupportedFormats === 'function') {
+                const supported = await BarcodeDetector.getSupportedFormats();
+                const filtered = preferredFormats.filter(f => supported.includes(f));
+                if (filtered.length > 0) {
+                    formats = filtered;
+                }
+                console.log('[扫码] 设备支持格式:', supported, '| 实际使用格式:', formats);
+            }
+            detector = new BarcodeDetector({ formats });
         } catch (detectorError) {
             console.error('初始化识别器失败', detectorError);
             setStatus('初始化扫码识别器失败，请使用下方输入框手动录入。', 'error');
@@ -1839,7 +1849,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: 'environment' } },
+                video: {
+                    facingMode: { ideal: 'environment' },
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                },
                 audio: false
             });
             video.srcObject = stream;
