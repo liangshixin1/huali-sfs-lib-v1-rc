@@ -431,18 +431,18 @@ class BorrowError(Exception):
 
 def borrow_book_with_lock(book_id, user_id):
     try:
-        with db.session.begin():
-            book = (
-                db.session.query(Book)
-                .with_for_update()
-                .filter_by(id=book_id)
-                .one()
-            )
-            if book.quantity_available <= 0:
-                raise BorrowError('该书已无库存可借。')
-            book.quantity_available -= 1
-            db.session.add(BorrowRecord(user_id=user_id, book_id=book.id))
-            book_title = book.title
+        book = (
+            db.session.query(Book)
+            .with_for_update()
+            .filter_by(id=book_id)
+            .one()
+        )
+        if book.quantity_available <= 0:
+            raise BorrowError('该书已无库存可借。')
+        book.quantity_available -= 1
+        db.session.add(BorrowRecord(user_id=user_id, book_id=book.id))
+        book_title = book.title
+        db.session.commit()
         return True, f'成功借阅《{book_title}》。', 'success'
     except BorrowError as exc:
         db.session.rollback()
