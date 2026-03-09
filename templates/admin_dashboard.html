@@ -271,9 +271,14 @@
                     <h2 class="text-lg sm:text-xl font-semibold text-gray-800">
                         <i class="fas fa-book text-blue-500 mr-2"></i>书目数据管理
                     </h2>
-                    <button id="addBookBtn" class="w-full sm:w-auto bg-green-600 text-white px-3 sm:px-4 py-2 hover:bg-green-700 fluent-btn text-sm sm:text-base">
-                        <i class="fas fa-plus mr-2"></i>添加新书
-                    </button>
+                    <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <a href="{{ url_for('admin_export_books') }}" class="w-full sm:w-auto bg-teal-600 text-white px-3 sm:px-4 py-2 hover:bg-teal-700 fluent-btn text-sm sm:text-base text-center">
+                            <i class="fas fa-file-excel mr-2"></i>导出书目
+                        </a>
+                        <button id="addBookBtn" class="w-full sm:w-auto bg-green-600 text-white px-3 sm:px-4 py-2 hover:bg-green-700 fluent-btn text-sm sm:text-base">
+                            <i class="fas fa-plus mr-2"></i>添加新书
+                        </button>
+                    </div>
                 </div>
                 
                 <!-- 书目统计 -->
@@ -365,9 +370,14 @@
                     <h2 class="text-lg sm:text-xl font-semibold text-gray-800">
                         <i class="fas fa-users text-purple-500 mr-2"></i>教职工账户管理
                     </h2>
-                    <button id="addUserBtn" class="w-full sm:w-auto bg-green-600 text-white px-3 sm:px-4 py-2 hover:bg-green-700 fluent-btn text-sm sm:text-base">
-                        <i class="fas fa-user-plus mr-2"></i>添加新用户
-                    </button>
+                    <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <a href="{{ url_for('admin_export_users') }}" class="w-full sm:w-auto bg-teal-600 text-white px-3 sm:px-4 py-2 hover:bg-teal-700 fluent-btn text-sm sm:text-base text-center">
+                            <i class="fas fa-file-excel mr-2"></i>导出用户
+                        </a>
+                        <button id="addUserBtn" class="w-full sm:w-auto bg-green-600 text-white px-3 sm:px-4 py-2 hover:bg-green-700 fluent-btn text-sm sm:text-base">
+                            <i class="fas fa-user-plus mr-2"></i>添加新用户
+                        </button>
+                    </div>
                 </div>
 
                 <!-- 用户统计 -->

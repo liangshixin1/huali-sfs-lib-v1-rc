@@ -1760,6 +1760,38 @@ def admin_export_records():
     filename = f"borrow_records_{datetime.now().strftime('%Y%m%d')}.xlsx"
     return Response(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment;filename={filename}"})
 
+@app.route('/admin/export-books')
+@login_required
+def admin_export_books():
+    if current_user.role != 'admin': abort(403)
+    books = Book.query.order_by(Book.id).all()
+    data = [{'书名': b.title, '出版社': b.publisher or '', 'ISBN': b.isbn, '图书编码': b.book_code, '书柜号': b.bookshelf_number or '', '总库存量': b.stock, '现库存量': b.quantity_available} for b in books]
+    df = pd.DataFrame(data, columns=['书名', '出版社', 'ISBN', '图书编码', '书柜号', '总库存量', '现库存量'])
+    if not df.empty:
+        df = df.applymap(sanitize_excel_cell)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='书目数据库')
+    output.seek(0)
+    filename = f"books_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    return Response(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment;filename={filename}"})
+
+@app.route('/admin/export-users')
+@login_required
+def admin_export_users():
+    if current_user.role != 'admin': abort(403)
+    users = User.query.filter_by(role='faculty').order_by(User.id).all()
+    data = [{'用户ID': u.username, '用户名': u.full_name} for u in users]
+    df = pd.DataFrame(data, columns=['用户ID', '用户名'])
+    if not df.empty:
+        df = df.applymap(sanitize_excel_cell)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='用户列表')
+    output.seek(0)
+    filename = f"users_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    return Response(output, mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", headers={"Content-Disposition": f"attachment;filename={filename}"})
+
 # --- 应用初始化函数 ---
 def init_database():
     with app.app_context():
