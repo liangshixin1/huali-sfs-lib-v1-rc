@@ -1532,7 +1532,7 @@ def admin_import_users():
         return redirect(url_for('admin_dashboard'))
 
     try:
-        df = pd.read_excel(file)
+        df = pd.read_excel(file, dtype={'工号': str})
     except Exception as exc:
         flash(f'无法读取上传的用户文件: {exc}', 'danger')
         return redirect(url_for('admin_dashboard'))
@@ -1552,6 +1552,13 @@ def admin_import_users():
 
     for _, row in df.iterrows():
         username = str(row.get('工号', '')).strip()
+        # When Excel stores the staff ID as a number, pandas converts it to a
+        # float string like "32.0". Strip the redundant ".0" suffix so the
+        # stored account matches the original numeric value (e.g. "32").
+        # Note: text-formatted cells with leading zeros (e.g. "00032") are
+        # preserved intact by the dtype={'工号': str} setting above.
+        if username.endswith('.0') and username[:-2].lstrip('-').isdigit():
+            username = username[:-2]
         full_name = str(row.get('教职工姓名', '')).strip() or username
         raw_password = row.get(password_column)
 
@@ -1804,9 +1811,11 @@ def init_database():
         try:
             user_file = os.path.join(basedir, '账密.xlsx')
             if os.path.exists(user_file):
-                df_users = pd.read_excel(user_file)
+                df_users = pd.read_excel(user_file, dtype={'工号': str})
                 for _, row in df_users.iterrows():
-                    username = str(row['工号'])
+                    username = str(row['工号']).strip()
+                    if username.endswith('.0') and username[:-2].lstrip('-').isdigit():
+                        username = username[:-2]
                     if not User.query.filter_by(username=username).first():
                         db.session.add(User(username=username, full_name=row.get('教职工姓名', username), role='faculty', password_hash=generate_password_hash(str(row['身份证后四位']))))
                 print(f"Imported users from 账密.xlsx")
