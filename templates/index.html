@@ -1829,10 +1829,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             html5QrCode = new Html5Qrcode('reader');
             await html5QrCode.start(
-                {
-                    facingMode: 'environment',
-                    advanced: [{ focusMode: 'continuous' }]
-                },
+                { facingMode: 'environment' },
                 {
                     fps: 15,
                     qrbox: { width: boxWidth, height: boxHeight }
