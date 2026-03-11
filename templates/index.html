@@ -1823,13 +1823,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         try {
+            const readerEl = document.getElementById('reader');
+            const boxWidth = Math.min(Math.floor(readerEl.clientWidth * 0.85), 300);
+            const boxHeight = Math.floor(boxWidth * 0.4);
+
             html5QrCode = new Html5Qrcode('reader');
             await html5QrCode.start(
-                { facingMode: 'environment' },
                 {
-                    fps: 10,
-                    qrbox: { width: 250, height: 100 },
-                    formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ]
+                    facingMode: 'environment',
+                    advanced: [{ focusMode: 'continuous' }]
+                },
+                {
+                    fps: 15,
+                    qrbox: { width: boxWidth, height: boxHeight }
                 },
                 async (decodedText) => {
                     if (isProcessing) return;
